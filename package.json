@@ -1,0 +1,37 @@
+{
+  "name": "@yottameta/yotta-learn",
+  "version": "0.1.0",
+  "description": "元习 —— 跨智能体的学习闭环技能：把错误/纠正/洞见沉淀为 .learnings/ 条目，供后续会话与技能改进复用。",
+  "license": "MIT",
+  "keywords": [
+    "agent-skills",
+    "yotta-learn",
+    "learning",
+    "self-improvement",
+    "memory",
+    "yottaskills"
+  ],
+  "files": [
+    "SKILL.md",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "CHANGELOG.md",
+    "install.sh",
+    "references",
+    "scripts",
+    "hooks",
+    "assets",
+    "bin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YottaMeta/yotta-learn.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "yotta-learn": "bin/install.js"
+  }
+}
