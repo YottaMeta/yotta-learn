@@ -1,12 +1,14 @@
+<p align="center"><b>Language</b>: English · <a href="./README.zh-CN.md">中文</a></p>
+
 <p align="center">
   <img src="assets/banner.png" alt="yotta-learn banner" width="100%" />
 </p>
 
 <h1 align="center">yotta-learn · 元习</h1>
 
-<p align="center">跨智能体的学习闭环技能：把错误、纠正与洞见沉淀为 <b>.learnings/</b> 条目，供后续会话与技能改进复用。适用于命令失败、用户纠正、发现更好做法、请求缺失能力、外部接口故障、知识过时等需要沉淀经验的场景。</p>
-<p align="center">检测到命令失败 / 用户纠正 / 发现更好的做法 / 请求缺失能力 / 外部接口故障 / 知识过时 / 需要沉淀经验，或用户说 记一笔 / 学习 / 沉淀 / self-improvement / learnings 时自动激活——<b>不靠关键词碰运气，按是否需要沉淀经验判定</b>。</p>
-<p align="center">Python 3.8+ 标准库实现，零依赖；Windows + Linux 通用；初始化绝不覆盖已有 .learnings/ 数据。</p>
+<p align="center">YottaMeta's cross-agent <b>learning-loop</b> skill: turns mistakes, corrections and insights into reusable <b>.learnings/</b> entries for later sessions and skill improvement. Suited for command failures, user corrections, discovering a better practice, requesting a missing capability, external-interface failures, and stale knowledge.</p>
+<p align="center">Activates on command failure / user correction / a better approach / a missing capability / an external-interface failure / stale knowledge / a need to capture experience, or when the user says 记一笔 / learn / 沉淀 / self-improvement / learnings — judged by whether experience should be captured, not by keyword luck.</p>
+<p align="center">Python 3.8+ standard library, zero dependencies; Windows + Linux; init never overwrites existing .learnings/ data.</p>
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue" /></a>
@@ -17,109 +19,108 @@
   <a href="https://github.com/YottaMeta/yotta-learn"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen" /></a>
 </p>
 
-## 这是什么
+## What it is
 
-AI 智能体最常见的浪费，是同一个错误在不同会话里反复犯。元习把「这次学到的」变成「下次可复用的」：把错误、纠正与洞见沉淀为项目内的 .learnings/ 条目，供后续会话回看、统计与复用。
+The most common waste for an AI agent is repeating the same mistake across sessions. Yuanxi turns "what I learned this time" into "reusable next time": it captures mistakes, corrections and insights as project-local .learnings/ entries for later sessions to review, aggregate and reuse.
 
-它不是某个平台的专属功能，而是一份与智能体无关的 CLI 工具包：装进任何支持 Agent Skills 的智能体即可按需调用，只写你指定的 .learnings/ 目录，也不需要在 package.json 写依赖。
+It is not tied to one platform — it is an agent-agnostic CLI toolkit: install it into any agent that supports Agent Skills, and it only writes to the .learnings/ directory you specify. No dependency is added to package.json.
 
-## 核心价值
+## Core value
 
-- **沉淀**：log 命令把条目写入 .learnings/（LEARNINGS / ERRORS / FEATURE_REQUESTS），自动编号 + 时间戳。
-- **复用**：list / review / stats 回看与统计；promote 把重要条目提升到 AGENTS.md / CLAUDE.md。
-- **改进**：extract 由高价值条目生成新技能骨架；Pattern-Key 追踪复发模式。
-- **可联动**：log --remember 可选同步到 yotta-memory（元忆），未安装/失败自动降级，绝不阻断本地记录。
-- **不覆盖**：初始化绝不改动已有 .learnings/ 数据，旧格式条目可读。
+- **Capture** — the log command writes entries into .learnings/ (LEARNINGS / ERRORS / FEATURE_REQUESTS), auto-numbered and timestamped.
+- **Reuse** — list / review / stats to review and aggregate; promote lifts important entries into AGENTS.md / CLAUDE.md.
+- **Improve** — extract builds a new skill skeleton from high-value entries; Pattern-Key tracks recurring patterns.
+- **Optional integration** — log --remember optionally syncs to yotta-memory; degrades gracefully when not installed / failed, and never blocks local capture.
+- **No overwrite** — init never touches existing .learnings/ data; old-format entries remain readable.
 
-## 核心优势
+## Advantages
 
-| 优势 | 说明 |
+| Advantage | Description |
 |---|---|
-| **跨智能体** | .learnings/ 是项目内文件，Claude Code / Codex / Cursor 等共享同一份 |
-| **Pattern-Key 复发追踪** | 同一模式多次出现即提示，把偶发错误升级为系统性改进点 |
-| **可联动可选** | 与元忆打通，但未安装/未初始化/失败自动降级 A/B/C，绝不阻断本地记录 |
-| **幂等初始化** | init 可重复执行，不覆盖已有条目 |
-| **自动去重** | promote / extract 自动去重，避免同一经验重复提升 |
-| **零依赖** | Python 3.8+ 标准库，无 daemon / 无数据库；Windows + Linux 通用 |
-| **生态分发** | GitHub + npm 双源同步发布；npx / install.sh / 手动复制三种安装方式 |
+| **Cross-agent** | .learnings/ is a project-local file; Claude Code / Codex / Cursor etc. share the same copy |
+| **Pattern-Key recurrence** | Repeating patterns get flagged, upgrading occasional errors into systemic improvements |
+| **Optional integration** | Connects to 元忆 but degrades A/B/C when not installed / uninitialized / failed, never blocks local capture |
+| **Idempotent init** | init can be re-run without overwriting existing entries |
+| **Auto-dedup** | promote / extract deduplicate automatically |
+| **Zero dependency** | Python 3.8+ standard library; no daemon / no database; Windows + Linux |
+| **Ecosystem distribution** | GitHub + npm dual-source; npx / install.sh / manual copy |
 
-## 功能体系
+## Commands
 
-| 命令 | 作用 |
+| Command | Purpose |
 |---|---|
-| init | 初始化 .learnings/（幂等，不覆盖已有文件） |
-| log | 记录一条学习/错误/功能请求（自动生成 ID 如 LRN-20260826-001） |
-| list / review / stats | 回看、复审与统计条目 |
-| promote | 把重要条目提升到 AGENTS.md / CLAUDE.md（自动去重） |
-| extract | 由高价值条目生成新技能骨架（--dry-run 预览） |
-| log --remember | 可选同步到元忆（yotta-memory），未安装自动降级 |
+| init | Initialize .learnings/ (idempotent, never overwrites existing files) |
+| log | Record a learning / error / feature request (auto ID like LRN-20260826-001) |
+| list / review / stats | Review and aggregate entries |
+| promote | Lift important entries into AGENTS.md / CLAUDE.md (auto-dedup) |
+| extract | Build a skill skeleton from high-value entries (--dry-run preview) |
+| log --remember | Optional sync to yotta-memory; degrades when not installed |
 
-## 数据协议
+## Data protocol
 
-- 目录：项目根 `.learnings/`（可用 `--dir` 指定）。
-- 文件：LEARNINGS.md（LRN-）、ERRORS.md（ERR-）、FEATURE_REQUESTS.md（FEAT-）。
-- ID：`LRN/ERR/FEAT-YYYYMMDD-XXX`（同一天自增）。
-- 字段：Logged / Priority / Status / Area / Pattern-Key；正文分 Summary 与 Details。
-- 兼容：已有用户数据保留，初始化绝不覆盖；旧格式条目可读。
+- Directory: project root .learnings/ (override with --dir).
+- Files: LEARNINGS.md (LRN-), ERRORS.md (ERR-), FEATURE_REQUESTS.md (FEAT-).
+- ID: `LRN/ERR/FEAT-YYYYMMDD-XXX` (auto-increment per day).
+- Fields: Logged / Priority / Status / Area / Pattern-Key; body split into Summary and Details.
+- Compatibility: existing user data is preserved; init never overwrites; old-format entries readable.
 
-## 使用示例
+## Usage
 
 ```bash
-# 初始化 .learnings/（幂等，不覆盖已有文件）
+# Initialize .learnings/ (idempotent, never overwrites existing files)
 python3 scripts/yotta_learn.py init
 
-# 记录一条学习（自动生成 ID 如 LRN-20260826-001）
+# Record a learning (auto ID like LRN-20260826-001)
 python3 scripts/yotta_learn.py log --type learning --category correction \
   --priority high --area git --pattern-key push-gate \
-  --message "推送前必须先跑测试并核对输出"
+  --message "Run the tests and verify output before pushing"
 
-# 记录一条错误（第二行起进入 Details）
-python3 scripts/yotta_learn.py log --type error --priority critical \
-  --message "第一行是摘要"$'\n'"第二行是详情"
+# Record an error / feature request
+python3 scripts/yotta_learn.py log --type error --category tooling --priority medium \
+  --area build --pattern-key pyc --message "py_compile created __pycache__ that leaked into npm pack"
 
-# 列出 / 回看 / 统计
-python3 scripts/yotta_learn.py list --status pending
-python3 scripts/yotta_learn.py review
+# Review and aggregate
+python3 scripts/yotta_learn.py list
 python3 scripts/yotta_learn.py stats
 
-# 提升到 AGENTS.md / CLAUDE.md（自动去重）
-python3 scripts/yotta_learn.py promote LRN-20260826-001
+# Lift an important entry into AGENTS.md / CLAUDE.md (auto-dedup)
+python3 scripts/yotta_learn.py promote ERR-20260827-003
 
-# 由条目生成技能骨架
+# Build a skill skeleton from a high-value entry (preview only)
 python3 scripts/yotta_learn.py extract LRN-20260826-001 --slug my-skill --dry-run
 
-# 可选：同步到元忆（yotta-memory），未安装自动降级
+# Optional: sync to yotta-memory; degrades when not installed
 python3 scripts/yotta_learn.py log --message "..." --remember
 ```
 
-**exit code 语义**：0 = 成功；1 = 未找到/无事可做；4 = 用法错误。
+**Exit-code semantics**: 0 = success; 1 = nothing found / nothing to do; 4 = usage error.
 
-## 安装
+## Installation
 
-三种方式任选其一，技能文件统一从 **npm** 获取（GitHub 无代理时较慢，npm 可配国内镜像加速）。
+Pick any of the three methods; skill files are always fetched from **npm** (GitHub can be slow without a proxy; npm supports mirrors).
 
-### 方式一：npm（推荐，一行安装）
+### Method 1: npm (recommended, one-liner)
 ```bash
-# 国内加速（可选）：npm config set registry https://registry.npmmirror.com
+# Optional China mirror: npm config set registry https://registry.npmmirror.com
 npx -y @yottameta/yotta-learn -g
-npx -y @yottameta/yotta-learn --agent codex   # 装到指定智能体（推荐）
-npx -y @yottameta/yotta-learn --dir <你的技能目录>   # 任意智能体：指定目录安装
+npx -y @yottameta/yotta-learn --dir <your skills dir>   # any agent: install to a custom directory
 ```
-> 智能体不在预置列表里？用 `--dir` 指定它的 skills 目录，或手动复制（方式三）。`--list` 可查看各智能体对应的默认目录。想手动拿文件也可 `npm pack @yottameta/yotta-learn` 解包后按方式二/三安装。
+> Agent not in the preset list? Use `--dir` to point at its skills directory, or copy manually (Method 3). `--list` shows the default directory of each agent. To grab the files yourself, run `npm pack @yottameta/yotta-learn` and unpack, then use Method 2 or 3.
 
-### 方式二：install.sh 一键安装
+### Method 2: install.sh
+After obtaining the skill folder (`npm pack` unpack or `git clone`), enter the folder:
 ```bash
-bash install.sh -g    # 用户级；bash install.sh --list 查看全部目录
-bash install.sh --agent codex   # 指定智能体（--list 可查看可用项）
-bash install.sh       # 项目级：自动检测已存在的 .claude/.cursor/.codex 等 skills 目录
+bash install.sh -g    # user-level; bash install.sh --list shows all directories
+bash install.sh --agent codex   # a specific agent (see --list)
+bash install.sh       # project-level: auto-detect existing skills directories
 bash install.sh --dir /path/to/skills
 ```
-> 覆盖 17 类智能体，含国内 Trae / Qwen / Comate / CodeBuddy / Kimi。Windows 用户：装有 Git Bash 即可用；否则用方式三手动复制。
+> Covers 17 agent families, including Trae / Qwen / Comate / CodeBuddy / Kimi.
 
-### 方式三：手动复制
-把整个 `yotta-learn` 文件夹复制到目标智能体的 skills 目录。常见位置（用户级；Windows 用 `%USERPROFILE%`，Linux/macOS 用 `~`）：
+### Method 3: manual copy
+Copy the whole `yotta-learn` folder into the target agent's skills directory. Common user-level locations (`%USERPROFILE%` on Windows, `~` on Linux/macOS):
 
-| 智能体 | 用户级目录 | 项目级目录 |
+| Agent | User-level directory | Project-level directory |
 |---|---|---|
 | Codex | `%USERPROFILE%\.codex\skills\yotta-learn\` | `.codex\skills\` |
 | Claude Code | `%USERPROFILE%\.claude\skills\yotta-learn\` | `.claude\skills\` |
@@ -132,35 +133,37 @@ bash install.sh --dir /path/to/skills
 | Kiro | `%USERPROFILE%\.kiro\skills\yotta-learn\` | `.kiro\skills\` |
 | WorkBuddy | `%USERPROFILE%\.workbuddy\skills\yotta-learn\` | `.workbuddy\skills\` |
 | Trae Code CLI | `%USERPROFILE%\.traecli\skills\yotta-learn\` | `.traecli\skills\` |
-| Trae IDE（国内） | `%USERPROFILE%\.trae-cn\skills\yotta-learn\` | `.trae\skills\` |
+| Trae IDE (CN) | `%USERPROFILE%\.trae-cn\skills\yotta-learn\` | `.trae\skills\` |
 | Qwen Code | `%USERPROFILE%\.qwen\skills\yotta-learn\` | `.qwen\skills\` |
 | Comate | `%USERPROFILE%\.comate\skills\yotta-learn\` | `.comate\skills\` |
 | CodeBuddy | `%USERPROFILE%\.codebuddy\skills\yotta-learn\` | `.codebuddy\skills\` |
 | Kimi | `%USERPROFILE%\.kimi\skills\yotta-learn\` | `.kimi\skills\` |
-| 通用 AGENTS.md | `%USERPROFILE%\.agents\skills\yotta-learn\` | `.agents\skills\` |
+| Generic AGENTS.md | `%USERPROFILE%\.agents\skills\yotta-learn\` | `.agents\skills\` |
 
-> Codex 默认目录若设置了环境变量 `CODEX_HOME`，以该变量为准；opencode 若设置 `XDG_CONFIG_HOME` 同理。`.agents\skills` 并非通用目录，仅 OpenCode / Cursor / Cline / Amp / Kimi / Gemini CLI / GitHub Copilot 等会读取，**Claude Code 与 Codex 默认不读**。不确定时用 `--dir` 指定，或让该智能体自行安装。
+> If Codex's `CODEX_HOME` is set, it overrides the default; the same applies to opencode's `XDG_CONFIG_HOME`. `.agents\skills` is not a universal directory — only OpenCode / Cursor / Cline / Amp / Kimi / Gemini CLI / GitHub Copilot etc. read it; **Claude Code and Codex do not read it by default**. When unsure, use `--dir` or let the agent install it.
 
-## 升级 / 卸载
+> Project-level: run `npx -y @yottameta/yotta-learn` or `bash install.sh` inside the project to install into the detected project-level directory.
 
-- **升级**：重新安装最新版覆盖即可——`npx -y @yottameta/yotta-learn -g` 或重跑 `bash install.sh -g`。技能目录内的旧文件会被覆盖；不影响项目中已有的其他文件。
-- **卸载**：删除目标智能体 skills 目录下的 `yotta-learn` 文件夹（各智能体目录见上表）即可。卸载后本技能不再生效。
+## Upgrade / uninstall
 
-## 常见问题
+- **Upgrade**: reinstall the latest version — `npx -y @yottameta/yotta-learn -g` or re-run `bash install.sh -g`. Old files in the skill directory are overwritten; other project files are untouched.
+- **Uninstall**: delete the `yotta-learn` folder in the target agent's skills directory (see the table above).
 
-- **会不会覆盖我已有的记录？** 不会。init 是幂等的，绝不改动已有的 .learnings/ 数据；旧格式条目也能读。
-- **元忆没装，还能用吗？** 能。log --remember 是可选增强；未安装 / 未初始化 / 失败时自动降级（A/B/C），只在本地 .learnings/ 记录，绝不阻断。
-- **会记录敏感信息吗？** 默认不记录私密信息（令牌、密钥、环境变量值、完整源码）；确有需要时建议用摘要或脱敏片段。
-- **适合哪些团队？** 任何想避免「同一个错误反复犯」的智能体工作流，尤其是多智能体 / 多会话 / 多人协作场景。
+## FAQ
 
-## 相关技能
+- **Will it overwrite my existing entries?** No. init is idempotent and never touches existing .learnings/ data; old-format entries remain readable.
+- **Can I use it without 元忆?** Yes. log --remember is optional; it degrades A/B/C when not installed / uninitialized / failed, recording only locally in .learnings/ and never blocking you.
+- **Does it record sensitive info?** By default no (tokens, keys, env-var values, full source). If truly needed, use a summary or a redacted snippet.
+- **Who is it for?** Any agent workflow that wants to avoid repeating the same mistake — especially multi-agent / multi-session / multi-person collaboration.
 
-同属 YottaMeta 技能矩阵（学习与工程家族）：[yotta-memory](https://github.com/YottaMeta/yotta-memory)（元忆，跨会话长期记忆）与元习互补——一个管「项目内 .learnings/ 学习闭环」，一个管「跨会话长期记忆」；[anti-shallow](https://github.com/YottaMeta/anti-shallow)（防敷衍）与 [workflow-standard](https://github.com/YottaMeta/workflow-standard)（工作流标准）从执行纪律端配合，避免「会沉淀却不严谨」。
+## Related skills
 
-## 开发与校验
+Same YottaMeta skill matrix (learning & engineering family): [yotta-memory](https://github.com/YottaMeta/yotta-memory) (元忆, cross-session long-term memory) complements 元习 — one handles "project-local .learnings/ loop", the other "cross-session long-term memory"; [anti-shallow](https://github.com/YottaMeta/anti-shallow) (anti-shallow) and [workflow-standard](https://github.com/YottaMeta/workflow-standard) (workflow standard) reinforce it from the execution-discipline side, so you don't "capture but stay sloppy".
 
-本项目内运行：`python tools/validate-skill.py yotta-learn`。
+## Development & validation
 
-## 许可证
+Run in this repo: `python tools/validate-skill.py yotta-learn`.
 
-MIT © YottaMeta —— 详见 [LICENSE](./LICENSE)。品牌声明见 [NOTICE](./NOTICE)。上游来源致谢：协议与设计参考开源社区 self-improving-agent 类技能思路，实现为 YottaMeta 自有。
+## License
+
+MIT © YottaMeta — see [LICENSE](./LICENSE). Brand statement in [NOTICE](./NOTICE). Upstream attribution: protocol & design reference the open-source self-improving-agent family; implementation is YottaMeta's own.
