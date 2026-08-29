@@ -43,7 +43,7 @@ AI 智能体最常见的浪费，是同一个错误在不同会话里反复犯�
 | **幂等初始化** | init 可重复执行，不覆盖已有条目 |
 | **自动去重** | promote / extract 自动去重，避免同一经验重复提升 |
 | **零依赖** | Python 3.8+ 标准库，无 daemon / 无数据库；Windows + Linux 通用 |
-| **生态分发** | GitHub + npm 双源同步发布；npx / install.sh / 手动复制三种安装方式 |
+| **生态分发** | GitHub + npm 双源同步发布；npx / git clone / Download ZIP / install.sh 四种安装方式 |
 
 ## 功能体系
 
@@ -98,29 +98,42 @@ python3 scripts/yotta_learn.py log --message "..." --remember
 
 ## 安装
 
-三种方式任选其一，技能文件统一从 **npm** 获取（GitHub 无代理时较慢，npm 可配国内镜像加速）。
+以下四种方式任选，顺序即推荐优先级；技能文件一律从 **npm** 获取（GitHub 无代理较慢，npm 支持镜像）。
 
-### 方式一：npm（推荐，一行安装）
-```bash
-# 国内加速（可选）：npm config set registry https://registry.npmmirror.com
-npx -y @yottameta/yotta-learn -g
-npx -y @yottameta/yotta-learn --dir <你的技能目录>   # 任意智能体：指定目录安装
+### 方式一：npm 一行装（推荐）
+
+```text
+# 可选国内加速：npm config set registry https://registry.npmmirror.com
+npx -y @yottameta/yotta-learn --agent <智能体名称>      # 装到指定智能体默认用户级技能目录
+npx -y @yottameta/yotta-learn --dir <智能体的技能目录>  # 指到技能目录本身（如 ~/.codex/skills）
 ```
-> 智能体不在预置列表里？用 `--dir` 指定它的 skills 目录，或手动复制（方式三）。`--list` 可查看各智能体对应的默认目录。想手动拿文件也可 `npm pack @yottameta/yotta-learn` 解包后按方式二/三安装。
 
-### 方式二：install.sh 一键安装
-获取技能文件夹后（`npm pack` 解包或 `git clone`），进入技能文件夹：
-```bash
-bash install.sh -g    # 用户级；bash install.sh --list 查看全部目录
-bash install.sh --agent codex   # 指定智能体（--list 可查看可用项）
-bash install.sh       # 项目级：自动检测已存在的 .claude/.cursor/.codex 等 skills 目录
-bash install.sh --dir /path/to/skills
+- `--agent <name>` 自动装到该智能体默认用户级目录；`--list` 可查看各智能体默认目录。
+- `--dir <路径>` 装到指定的技能目录；未收录的智能体用 `--dir` 指到它的技能目录。
+- npmmirror 未同步新包（404）：加 `--registry=https://registry.npmjs.org/`（国内需代理），或稍等镜像缓存。
+
+### 方式二：git clone（开发者 / 有 git 环境）
+
+```text
+git clone https://github.com/YottaMeta/yotta-learn.git <智能体的技能目录>/yotta-learn
 ```
-> 覆盖 17 类智能体，含国内 Trae / Qwen / Comate / CodeBuddy / Kimi。Windows 用户：装有 Git Bash 即可用；否则用方式三手动复制。
 
+### 方式三：GitHub 下载压缩包（手动 / 无 git 环境）
+
+在 GitHub 仓库 `YottaMeta/yotta-learn` 点 **Code → Download ZIP**，解压后把 `yotta-learn` 文件夹放进智能体技能目录。
+
+### 方式四：install.sh（多智能体一键脚本）
+
+```text
+bash install.sh --agent <name>   # 装到指定智能体默认用户级目录
+bash install.sh --dir <path>     # 装到指定目录
+bash install.sh --list           # 列出智能体 -> 默认目录
+```
+
+> 方式一走 npm 源（npmmirror / npmjs），不依赖 GitHub；方式二 / 三走 GitHub，国内无代理可能失败。
 ## 升级 / 卸载
 
-- **升级**：重新安装最新版覆盖即可——`npx -y @yottameta/yotta-learn -g` 或重跑 `bash install.sh -g`。技能目录内的旧文件会被覆盖；不影响项目中已有的其他文件。
+- **升级**：重新安装最新版覆盖即可——重跑你用的安装命令（如 `npx -y @yottameta/yotta-learn --agent <name>` 或 `bash install.sh --agent <name>`）。技能目录内旧文件会被替换；不影响项目中其他文件。
 - **卸载**：删除目标智能体 skills 目录下的 `yotta-learn` 文件夹（各智能体目录见上表）即可。卸载后本技能不再生效。
 
 ## 常见问题

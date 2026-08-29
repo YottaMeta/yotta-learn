@@ -43,7 +43,7 @@ It is not tied to one platform — it is an agent-agnostic CLI toolkit: install 
 | **Idempotent init** | init can be re-run without overwriting existing entries |
 | **Auto-dedup** | promote / extract deduplicate automatically |
 | **Zero dependency** | Python 3.8+ standard library; no daemon / no database; Windows + Linux |
-| **Ecosystem distribution** | GitHub + npm dual-source; npx / install.sh / manual copy |
+| **Ecosystem distribution** | GitHub + npm dual-source; four install methods (npx / git clone / Download ZIP / install.sh) |
 
 ## Commands
 
@@ -97,56 +97,42 @@ python3 scripts/yotta_learn.py log --message "..." --remember
 
 ## Installation
 
-Pick any of the three methods; skill files are always fetched from **npm** (GitHub can be slow without a proxy; npm supports mirrors).
+Pick any of the four methods below; the order is the recommended priority. Skill files always come from **npm** (GitHub can be slow without a proxy; npm supports mirrors).
 
-### Method 1: npm (recommended, one-liner)
-```bash
+### Method 1: npm one-liner (recommended)
+
+```text
 # Optional China mirror: npm config set registry https://registry.npmmirror.com
-npx -y @yottameta/yotta-learn -g
-npx -y @yottameta/yotta-learn --dir <your skills dir>   # any agent: install to a custom directory
+npx -y @yottameta/yotta-learn --agent <agent-name>      # install to the agent's default user-level skills dir
+npx -y @yottameta/yotta-learn --dir <your-skills-dir>   # point to the skills dir itself (e.g. ~/.codex/skills)
 ```
-> Agent not in the preset list? Use `--dir` to point at its skills directory, or copy manually (Method 3). `--list` shows the default directory of each agent. To grab the files yourself, run `npm pack @yottameta/yotta-learn` and unpack, then use Method 2 or 3.
 
-### Method 2: install.sh
-After obtaining the skill folder (`npm pack` unpack or `git clone`), enter the folder:
-```bash
-bash install.sh -g    # user-level; bash install.sh --list shows all directories
-bash install.sh --agent codex   # a specific agent (see --list)
-bash install.sh       # project-level: auto-detect existing skills directories
-bash install.sh --dir /path/to/skills
+- `--agent <name>` installs to that agent's default user-level directory; `--list` shows each agent's default directory.
+- `--dir <path>` installs to the given directory; for agents not in the preset list, point `--dir` at their skills directory.
+- If the mirror has not synced the new package (404): add `--registry=https://registry.npmjs.org/` (a proxy may be needed in China), or wait for the mirror cache.
+
+### Method 2: git clone (developers / git available)
+
+```text
+git clone https://github.com/YottaMeta/yotta-learn.git <your-skills-dir>/yotta-learn
 ```
-> Covers 17 agent families, including Trae / Qwen / Comate / CodeBuddy / Kimi.
 
-### Method 3: manual copy
-Copy the whole `yotta-learn` folder into the target agent's skills directory. Common user-level locations (`%USERPROFILE%` on Windows, `~` on Linux/macOS):
+### Method 3: GitHub Download ZIP (manual / no git)
 
-| Agent | User-level directory | Project-level directory |
-|---|---|---|
-| Codex | `%USERPROFILE%\.codex\skills\yotta-learn\` | `.codex\skills\` |
-| Claude Code | `%USERPROFILE%\.claude\skills\yotta-learn\` | `.claude\skills\` |
-| Cursor | `%USERPROFILE%\.cursor\skills\yotta-learn\` | `.cursor\skills\` |
-| Windsurf | `%USERPROFILE%\.codeium\windsurf\skills\yotta-learn\` | `.windsurf\skills\` |
-| opencode | `%USERPROFILE%\.config\opencode\skills\yotta-learn\` | `.opencode\skills\` |
-| Gemini | `%USERPROFILE%\.gemini\skills\yotta-learn\` | `.gemini\skills\` |
-| Goose | `%USERPROFILE%\.config\goose\skills\yotta-learn\` | `.goose\skills\` |
-| Amp | `%USERPROFILE%\.config\agents\skills\yotta-learn\` | `.agents\skills\` |
-| Kiro | `%USERPROFILE%\.kiro\skills\yotta-learn\` | `.kiro\skills\` |
-| WorkBuddy | `%USERPROFILE%\.workbuddy\skills\yotta-learn\` | `.workbuddy\skills\` |
-| Trae Code CLI | `%USERPROFILE%\.traecli\skills\yotta-learn\` | `.traecli\skills\` |
-| Trae IDE (CN) | `%USERPROFILE%\.trae-cn\skills\yotta-learn\` | `.trae\skills\` |
-| Qwen Code | `%USERPROFILE%\.qwen\skills\yotta-learn\` | `.qwen\skills\` |
-| Comate | `%USERPROFILE%\.comate\skills\yotta-learn\` | `.comate\skills\` |
-| CodeBuddy | `%USERPROFILE%\.codebuddy\skills\yotta-learn\` | `.codebuddy\skills\` |
-| Kimi | `%USERPROFILE%\.kimi\skills\yotta-learn\` | `.kimi\skills\` |
-| Generic AGENTS.md | `%USERPROFILE%\.agents\skills\yotta-learn\` | `.agents\skills\` |
+On the GitHub repository `YottaMeta/yotta-learn`, click **Code → Download ZIP**, unzip it and put the `yotta-learn` folder into the agent's skills directory.
 
-> If Codex's `CODEX_HOME` is set, it overrides the default; the same applies to opencode's `XDG_CONFIG_HOME`. `.agents\skills` is not a universal directory — only OpenCode / Cursor / Cline / Amp / Kimi / Gemini CLI / GitHub Copilot etc. read it; **Claude Code and Codex do not read it by default**. When unsure, use `--dir` or let the agent install it.
+### Method 4: install.sh (multi-agent one-liner script)
 
-> Project-level: run `npx -y @yottameta/yotta-learn` or `bash install.sh` inside the project to install into the detected project-level directory.
+```text
+bash install.sh --agent <name>   # install to the agent's default user-level directory
+bash install.sh --dir <path>     # install to the given directory
+bash install.sh --list           # list agents -> default directories
+```
 
+> Method 1 uses the npm registry (npmmirror / npmjs) and does not depend on GitHub; Methods 2/3 use GitHub and may fail without a proxy in China.
 ## Upgrade / uninstall
 
-- **Upgrade**: reinstall the latest version — `npx -y @yottameta/yotta-learn -g` or re-run `bash install.sh -g`. Old files in the skill directory are overwritten; other project files are untouched.
+- **Upgrade**: reinstall the latest version to overwrite — rerun the install command you used (e.g. `npx -y @yottameta/yotta-learn --agent <name>` or `bash install.sh --agent <name>`). Old files in the skill directory are replaced; other project files are untouched.
 - **Uninstall**: delete the `yotta-learn` folder in the target agent's skills directory (see the table above).
 
 ## FAQ
