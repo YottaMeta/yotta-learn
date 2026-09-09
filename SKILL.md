@@ -1,6 +1,6 @@
 ---
 name: yotta-learn
-version: 0.1.4
+version: 0.2.0
 description: 元习 —— 跨智能体的学习闭环技能：把错误、纠正与洞见沉淀为 .learnings/ 条目，供后续会话与技能改进复用。触发：命令失败、用户纠正、发现更好的做法、请求缺失能力、外部接口故障、知识过时、需要沉淀经验时；或用户说 记一笔/学习/沉淀/self-improvement/learnings 等。边界：不写入私密/敏感信息（除非用户明确要求）；不自动改动系统文件。
 license: MIT
 ---
@@ -81,3 +81,9 @@ OpenClaw（openclaw-setup.md）；activator.sh / error-detector.sh 为 Linux-onl
 
 - references/examples.md — 记录示例与字段说明
 - references/hooks-setup.md — 各智能体 hook 接入详细步骤
+- references/walkthroughs.md — 命令失败 / 用户纠正 / 接口降级三类复杂走查
+- references/faq.md — 常见问题速查与安装排障
+
+## 常见问题（速查）
+
+条目写哪、重复问题、私密信息、元忆联动失败、hook 不生效时，先看 references/faq.md。

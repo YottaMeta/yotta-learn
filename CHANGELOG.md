@@ -1,5 +1,11 @@
 # 更新日志
 
+## v0.2.0 (2026-09-09)
+
+- 评测完善批 2：新增 references/faq.md 与 references/walkthroughs.md（命令失败/用户纠正/接口降级三类复杂走查）；SKILL.md 增加 FAQ 速查节。
+- 安装器错误处理：用法/目标/安装错误统一退出码与修复建议；新增 test/install.test.js。
+- package.json 补 npm test 脚本；版本对齐 0.2.0（package / SKILL / CHANGELOG / CLI）。
+
 ## v0.1.4 (2026-08-29)
 
 - 安装方式统一为四方式（对齐发布规范 §3.3.1）：方式一 `npx -y @yottameta/yotta-learn --agent <name>` / `--dir <dir>`（推荐，走 npm 源）；方式二 `git clone https://github.com/YottaMeta/yotta-learn.git`；方式三 GitHub Download ZIP；方式四 `bash install.sh --agent/--dir/--list`。移除 `npx skills` 与 `-g` 推荐；中英双 README 安装节同步。
@@ -16,7 +22,7 @@ README 按标准补全：新增「这是什么 / 核心价值 / 核心优势 / �
 
 ## v0.1.0 (2026-08-26)
 
-YottaMeta 自有实现首版（重写自第三方技术包 self-improving-agent v3.0.13，已完全重写，无上游代码）：
+YottaMeta 自有实现首版（参考开源社区 self-improving-agent 类技能思路，全新实现，不包含其代码）：
 
 - CLI 全跨平台：init / log / list / promote / review / stats / extract 七个子命令。
 - .learnings/ 协议：LEARNINGS / ERRORS / FEATURE_REQUESTS 三文件，ID 格式 LRN/ERR/FEAT-YYYYMMDD-XXX；
@@ -27,4 +33,4 @@ YottaMeta 自有实现首版（重写自第三方技术包 self-improving-agent 
 - 提升（promote）自动去重；extract 由条目生成技能骨架。
 - Hook 模板：OpenClaw / Claude Code / Codex 三种配置模板；bash hook 标注 Linux-only。
 - 零依赖（Python 3.8+ 标准库），Windows + Linux 通用，UTF-8 加固（GBK 控制台不崩）。
-- 版权：YottaMeta 纯自有 MIT + NOTICE 品牌声明；README 一行上游致谢。
+- 版权：YottaMeta 纯自有 MIT + NOTICE 品牌声明；README/NOTICE 一行来源说明。
