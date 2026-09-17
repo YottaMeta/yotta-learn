@@ -94,6 +94,14 @@ class LearnCliTest(unittest.TestCase):
         r = run_cli(["nonsense"], self.dir)
         self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
 
+    def test_invalid_category_lists_choices(self):
+        r = run_cli(["log", "--category", "bogus", "--message", "x"], self.dir)
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        text = r.stdout + r.stderr
+        for category in ("correction", "insight", "knowledge_gap",
+                         "best_practice", "error", "other"):
+            self.assertIn(category, text)
+
     def test_list_filters(self):
         run_cli(["log", "--type", "learning", "--category", "correction",
                  "--priority", "high", "--status", "pending", "--area", "git",

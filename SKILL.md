@@ -1,6 +1,6 @@
 ---
 name: yotta-learn
-version: 0.2.0
+version: 0.2.1
 description: 元习 —— 跨智能体的学习闭环技能：把错误、纠正与洞见沉淀为 .learnings/ 条目，供后续会话与技能改进复用。触发：命令失败、用户纠正、发现更好的做法、请求缺失能力、外部接口故障、知识过时、需要沉淀经验时；或用户说 记一笔/学习/沉淀/self-improvement/learnings 等。边界：不写入私密/敏感信息（除非用户明确要求）；不自动改动系统文件。
 license: MIT
 ---
@@ -26,6 +26,9 @@ license: MIT
 - 开始重要任务前，先 review 待处理条目。
 
 **Do NOT trigger**：不记录私密信息（令牌、密钥、环境变量值、完整源码）除非用户明确要求；推荐用摘要或脱敏片段。
+
+`--category` 是固定枚举：`correction` / `insight` / `knowledge_gap` / `best_practice` / `error` / `other`。
+不确定时用 `other`；非法值会退出码 4 并列出全部可用值。
 
 ## 快速使用
 

@@ -95,6 +95,7 @@ python3 scripts/yotta_learn.py log --message "..." --remember
 ```
 
 **exit code 语义**：0 = 成功；1 = 未找到/无事可做；4 = 用法错误。
+**category 可选值**：`correction` / `insight` / `knowledge_gap` / `best_practice` / `error` / `other`；不确定时用 `other`。
 
 ## 安装
 

@@ -1,5 +1,10 @@
 # 更新日志
 
+## v0.2.1 (2026-09-17)
+
+- `--category` 固定枚举写入 SKILL、README 与 FAQ：`correction / insight / knowledge_gap / best_practice / error / other`；非法值错误提示列出全部可用项。
+- 修正 README 中不存在的 `tooling` 示例，改为合法 `error`；新增枚举回归。
+
 ## v0.2.0 (2026-09-09)
 
 - 评测完善批 2：新增 references/faq.md 与 references/walkthroughs.md（命令失败/用户纠正/接口降级三类复杂走查）；SKILL.md 增加 FAQ 速查节。

@@ -1,6 +1,6 @@
 {
   "name": "@yottameta/yotta-learn",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Yuanxi — a cross-agent learning-loop skill: captures mistakes, corrections and insights as reusable .learnings/ entries for later sessions and skill improvement. Triggers on command failure / user correction / a better approach / a missing capability / an external-interface failure / stale knowledge / a need to capture experience. Boundaries: never records private/sensitive info unless explicitly requested; never auto-modifies system files.",
   "license": "MIT",
   "keywords": [
@@ -24,6 +24,7 @@
     "assets",
     "bin",
     "README.zh-CN.md",
+    "!scripts/test_*.py",
     "!scripts/__pycache__",
     "!**/__pycache__",
     "!**/*.pyc"

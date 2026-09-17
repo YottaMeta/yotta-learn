@@ -76,7 +76,7 @@ python3 scripts/yotta_learn.py log --type learning --category correction \
   --message "Run the tests and verify output before pushing"
 
 # Record an error / feature request
-python3 scripts/yotta_learn.py log --type error --category tooling --priority medium \
+python3 scripts/yotta_learn.py log --type error --category error --priority medium \
   --area build --pattern-key pyc --message "py_compile created __pycache__ that leaked into npm pack"
 
 # Review and aggregate
@@ -94,6 +94,7 @@ python3 scripts/yotta_learn.py log --message "..." --remember
 ```
 
 **Exit-code semantics**: 0 = success; 1 = nothing found / nothing to do; 4 = usage error.
+**Category values**: `correction` / `insight` / `knowledge_gap` / `best_practice` / `error` / `other`; use `other` when unsure.
 
 ## Installation
 
