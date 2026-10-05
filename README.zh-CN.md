@@ -6,8 +6,8 @@
 
 <h1 align="center">yotta-learn · 元习</h1>
 
-<p align="center">跨智能体的学习闭环技能：把错误、纠正与洞见沉淀为 <b>.learnings/</b> 条目，供后续会话与技能改进复用。适用于命令失败、用户纠正、发现更好做法、请求缺失能力、外部接口故障、知识过时等需要沉淀经验的场景。</p>
-<p align="center">检测到命令失败 / 用户纠正 / 发现更好的做法 / 请求缺失能力 / 外部接口故障 / 知识过时 / 需要沉淀经验，或用户说 记一笔 / 学习 / 沉淀 / self-improvement / learnings 时自动激活——<b>不靠关键词碰运气，按是否需要沉淀经验判定</b>。</p>
+<p align="center">跨智能体的学习闭环 + 知识库技能：把错误、纠正与洞见沉淀为 <b>.learnings/</b> 条目，把验证过的知识存入<b>分类索引的知识库</b>（关键词查询），供后续会话与技能改进复用。适用于命令失败、用户纠正、发现更好做法、请求缺失能力、外部接口故障、知识过时、需要沉淀或查询知识的场景。</p>
+<p align="center">检测到命令失败 / 用户纠正 / 发现更好的做法 / 请求缺失能力 / 外部接口故障 / 知识过时 / 需要沉淀或查询知识，或用户说 记一笔 / 学习 / 沉淀 / 知识库 / kb / 查知识 / self-improvement / learnings 时自动激活——<b>不靠关键词碰运气，按是否需要沉淀经验判定</b>。</p>
 <p align="center">Python 3.8+ 标准库实现，零依赖；Windows + Linux 通用；初始化绝不覆盖已有 .learnings/ 数据。</p>
 
 <p align="center">
@@ -28,8 +28,9 @@ AI 智能体最常见的浪费，是同一个错误在不同会话里反复犯�
 ## 核心价值
 
 - **沉淀**：log 命令把条目写入 .learnings/（LEARNINGS / ERRORS / FEATURE_REQUESTS），自动编号 + 时间戳。
-- **复用**：list / review / stats 回看与统计；promote 把重要条目提升到 AGENTS.md / CLAUDE.md。
+- **闭环**：update / resolve 更新条目状态与处置；list / review / stats 回看与统计；promote 把重要条目提升到 AGENTS.md / CLAUDE.md。
 - **改进**：extract 由高价值条目生成新技能骨架；Pattern-Key 追踪复发模式。
+- **知识库**：kb 命令组把验证过的知识沉淀为分类条目 —— 分类注册、草稿 / 核验、分片索引、关键词查询；写入默认草稿、核验后入库、查询默认只出已核验。
 - **可联动**：log --remember 可选同步到 yotta-memory（元忆），未安装/失败自动降级，绝不阻断本地记录。
 - **不覆盖**：初始化绝不改动已有 .learnings/ 数据，旧格式条目可读。
 
@@ -42,6 +43,8 @@ AI 智能体最常见的浪费，是同一个错误在不同会话里反复犯�
 | **可联动可选** | 与元忆打通，但未安装/未初始化/失败自动降级 A/B/C，绝不阻断本地记录 |
 | **幂等初始化** | init 可重复执行，不覆盖已有条目 |
 | **自动去重** | promote / extract 自动去重，避免同一经验重复提升 |
+| **知识库可查询** | 分类 + 分片索引 + 中文 bigram 关键词查询；任何智能体经 CLI 读写同一知识库 |
+| **可靠性内建** | 原子写 + 跨进程写锁 + 回收站 7 天 + 快照 + 独立目录备份 + doctor 体检 |
 | **零依赖** | Python 3.8+ 标准库，无 daemon / 无数据库；Windows + Linux 通用 |
 | **生态分发** | GitHub + npm 双源同步发布；npx / git clone / Download ZIP / install.sh 四种安装方式 |
 
@@ -51,9 +54,11 @@ AI 智能体最常见的浪费，是同一个错误在不同会话里反复犯�
 |---|---|
 | init | 初始化 .learnings/（幂等，不覆盖已有文件） |
 | log | 记录一条学习/错误/功能请求（自动生成 ID 如 LRN-20260826-001） |
+| update / resolve | 更新条目状态 / 优先级 / 处置说明（resolve 即标记已解决） |
 | list / review / stats | 回看、复审与统计条目 |
 | promote | 把重要条目提升到 AGENTS.md / CLAUDE.md（自动去重） |
 | extract | 由高价值条目生成新技能骨架（--dry-run 预览） |
+| kb | 知识库：init / config / category / add / review / query / index / stats / doctor / backup 等 |
 | log --remember | 可选同步到元忆（yotta-memory），未安装自动降级 |
 
 ## 数据协议
@@ -63,6 +68,7 @@ AI 智能体最常见的浪费，是同一个错误在不同会话里反复犯�
 - ID：`LRN/ERR/FEAT-YYYYMMDD-XXX`（同一天自增）。
 - 字段：Logged / Priority / Status / Area / Pattern-Key；正文分 Summary 与 Details。
 - 兼容：已有用户数据保留，初始化绝不覆盖；旧格式条目可读。
+- 知识库：默认 `~/.yottaskills/knowledge`（可用 `kb config set --dir <路径>` 指定任意位置）；条目为 Markdown + 受控 frontmatter，ID `KB-YYYYMMDD-XXX`，状态 draft / verified / deprecated。
 
 ## 使用示例
 
@@ -84,6 +90,10 @@ python3 scripts/yotta_learn.py list --status pending
 python3 scripts/yotta_learn.py review
 python3 scripts/yotta_learn.py stats
 
+# 更新状态 / 处置说明（resolve = update --status resolved）
+python3 scripts/yotta_learn.py update LRN-20260826-001 --status in_progress --note "处理中"
+python3 scripts/yotta_learn.py resolve LRN-20260826-001 --note "已修复并回归"
+
 # 提升到 AGENTS.md / CLAUDE.md（自动去重）
 python3 scripts/yotta_learn.py promote LRN-20260826-001
 
@@ -92,9 +102,20 @@ python3 scripts/yotta_learn.py extract LRN-20260826-001 --slug my-skill --dry-ru
 
 # 可选：同步到元忆（yotta-memory），未安装自动降级
 python3 scripts/yotta_learn.py log --message "..." --remember
+
+# 知识库：初始化 → 分类 → 写入草稿 → 核验 → 查询
+python3 scripts/yotta_learn.py kb init
+python3 scripts/yotta_learn.py kb category create agent-skills \
+  --name "智能体与技能开发" --description "技能开发与编排相关知识与方法"
+python3 scripts/yotta_learn.py kb add --category agent-skills \
+  --title "SQLite FTS5 中文检索的坑" \
+  --message "默认分词对中文不友好，需要 bigram 或外部分词器。" \
+  --tags "sqlite,检索" --source "experiment"
+python3 scripts/yotta_learn.py kb review KB-20261005-001 --pass --evidence "本地实测通过"
+python3 scripts/yotta_learn.py kb query 中文检索
 ```
 
-**exit code 语义**：0 = 成功；1 = 未找到/无事可做；4 = 用法错误。
+**exit code 语义**：0 = 成功；1 = 未找到/无事可做；4 = 用法或校验错误；5 = 门禁阻断（敏感 / 重复）；6 = 完整性（拒绝覆盖 / 数据损坏 / 写锁超时）。
 **category 可选值**：`correction` / `insight` / `knowledge_gap` / `best_practice` / `error` / `other`；不确定时用 `other`。
 
 ## 安装

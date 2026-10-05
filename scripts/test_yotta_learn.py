@@ -8,6 +8,7 @@ yotta-memory 联动四态（A 未装 / B 不可用 / C 超时 / ok 同步）、G
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -142,6 +143,48 @@ class LearnCliTest(unittest.TestCase):
         out = self.dir / ".learnings" / "extracted-skills" / "test-skill.md"
         self.assertTrue(out.exists())
         self.assertIn("name: test-skill", out.read_text(encoding="utf-8"))
+
+    def test_update_status_priority_note(self):
+        r = run_cli(["log", "--message", "needs update"], self.dir)
+        eid = r.stdout.split()[1]
+        r2 = run_cli(["update", eid, "--status", "in_progress",
+                      "--priority", "high", "--note", "处理中"], self.dir)
+        self.assertEqual(r2.returncode, 0, r2.stderr)
+        self.assertIn("status: pending -> in_progress", r2.stdout)
+        r3 = run_cli(["list", "--status", "in_progress", "--json"], self.dir)
+        data = json.loads(r3.stdout)
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["priority"], "high")
+        content = (self.dir / ".learnings" / "LEARNINGS.md").read_text(encoding="utf-8")
+        self.assertIn("### Resolution", content)
+        self.assertIn("处理中", content)
+
+    def test_resolve_command(self):
+        r = run_cli(["log", "--message", "resolve me"], self.dir)
+        eid = r.stdout.split()[1]
+        r2 = run_cli(["resolve", eid, "--note", "已修复"], self.dir)
+        self.assertEqual(r2.returncode, 0, r2.stderr)
+        r3 = run_cli(["list", "--status", "resolved", "--json"], self.dir)
+        self.assertEqual(len(json.loads(r3.stdout)), 1)
+
+    def test_update_missing_and_no_change(self):
+        r = run_cli(["update", "LRN-20200101-999", "--status", "resolved"], self.dir)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        r1 = run_cli(["log", "--message", "x"], self.dir)
+        eid = r1.stdout.split()[1]
+        r2 = run_cli(["update", eid], self.dir)
+        self.assertEqual(r2.returncode, 4, r.stdout + r.stderr)
+
+    def test_promote_second_entry_keeps_field_in_block(self):
+        run_cli(["log", "--message", "first item"], self.dir)
+        r2 = run_cli(["log", "--message", "second item"], self.dir)
+        eid2 = r2.stdout.split()[1]
+        run_cli(["promote", eid2], self.dir)
+        content = (self.dir / ".learnings" / "LEARNINGS.md").read_text(encoding="utf-8")
+        blocks = re.split(r"(?m)^## \[", content)
+        self.assertGreaterEqual(len(blocks), 3)
+        self.assertNotIn("Promoted-To", blocks[1])
+        self.assertIn("Promoted-To", blocks[2])
 
     def test_pattern_key_recurrence(self):
         for _ in range(2):

@@ -34,6 +34,17 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+try:
+    import yotta_kb
+    import yotta_kb_index
+except ImportError as _kb_import_error:  # pragma: no cover - 仅在包不完整时触发
+    print("[ERROR] 元习组件缺失（%s）：请用官方安装器重装完整技能包" % _kb_import_error,
+          file=sys.stderr)
+    sys.exit(4)
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
@@ -43,7 +54,7 @@ try:
 except Exception:
     pass
 
-VERSION = "0.2.2"
+VERSION = "0.3.0"
 TOOL_NAME = "yotta-learn"
 
 # 类型 → (ID 前缀, 文件名, 显示名)
@@ -449,32 +460,137 @@ def cmd_promote(args):
     return 0
 
 
+# ── 条目块级编辑（update / resolve / promote / extract 共用）────────────────
+
+def _block_last_field_index(block):
+    idx = None
+    for k, line in enumerate(block):
+        if FIELD_RE.match(line):
+            idx = k
+    return idx if idx is not None else 0
+
+
+def _set_field(block, key, value):
+    pat = "**%s**:" % key
+    for k, line in enumerate(block):
+        if line.startswith(pat):
+            block[k] = "%s %s" % (pat, value)
+            return
+    block.insert(_block_last_field_index(block) + 1, "%s %s" % (pat, value))
+
+
+def _remove_field(block, key):
+    pat = "**%s**:" % key
+    block[:] = [line for line in block if not line.startswith(pat)]
+
+
+def edit_entry_text(content, eid, status=None, priority=None, note=None, extra_fields=None):
+    """对指定条目块做字段 / Resolution 编辑；未找到条目返回 None。
+
+    块边界 = 本条目标题行到下一个条目标题行（或文件末尾），因此多条目
+    文件里第 2+ 条的编辑不会误改到第 1 条（历史缺陷回归）。
+    """
+    lines = content.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        m = ENTRY_RE.match(line)
+        if m and m.group(1).lower() == eid.lower():
+            start = i
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        if ENTRY_RE.match(lines[j]):
+            end = j
+            break
+    block = lines[start:end]
+    if status:
+        _set_field(block, "Status", status)
+    if priority:
+        _set_field(block, "Priority", priority)
+    for key, value in (extra_fields or {}).items():
+        _remove_field(block, key)
+        _set_field(block, key, value)
+    if note and note.strip():
+        note_line = "- %s %s" % (datetime.now().strftime("%Y-%m-%d"), note.strip())
+        rstart = None
+        for k, line in enumerate(block):
+            if RESOLUTION_RE.match(line):
+                rstart = k
+                break
+        if rstart is not None:
+            rend = len(block)
+            for j in range(rstart + 1, len(block)):
+                if re.match(r"^###\s+", block[j]) or block[j].strip() == "---":
+                    rend = j
+                    break
+            insert_at = rend
+            while insert_at > rstart + 1 and not block[insert_at - 1].strip():
+                insert_at -= 1
+            block.insert(insert_at, note_line)
+        else:
+            sep = None
+            for k in range(len(block) - 1, -1, -1):
+                if block[k].strip() == "---":
+                    sep = k
+                    break
+            insert_at = sep if sep is not None else len(block)
+            while insert_at > 0 and not block[insert_at - 1].strip():
+                insert_at -= 1
+            block[insert_at:insert_at] = ["", "### Resolution", "", note_line, ""]
+    new_lines = lines[:start] + block + lines[end:]
+    text = "\n".join(new_lines)
+    if content.endswith("\n"):
+        text += "\n"
+    return text
+
+
 def _update_entry_status(directory, entry, new_status, target_name):
-    """把条目 **Status** 更新为 promoted，并记录 Promoted-To。"""
+    """把条目 **Status** 更新为新状态，并记录 Promoted-To（块级编辑）。"""
     p = Path(entry.file_path)
     content = _read_text(p)
-    lines = content.splitlines()
-    out = []
-    in_entry = False
-    for line in lines:
-        if ENTRY_RE.match(line):
-            in_entry = line.startswith("[" + entry.eid.split("-", 1)[0] + "-")
-            if in_entry:
-                in_entry = line.startswith("## [" + entry.eid + "]")
-        if in_entry and line.startswith("**Status**:"):
-            out.append("**Status**: %s" % new_status)
-            continue
-        if in_entry and line.startswith("**Promoted-To**:"):
-            continue
-        out.append(line)
-    text = "\n".join(out)
-    # 在 Summary 前插入 Promoted-To 字段
-    marker = "### Summary"
-    if marker in text:
-        idx = text.index(marker)
-        insert = "\n**Promoted-To**: %s\n" % target_name
-        text = text[:idx] + insert + text[idx:]
-    _atomic_write_text(p, text)
+    new = edit_entry_text(content, entry.eid, status=new_status,
+                          extra_fields={"Promoted-To": target_name})
+    if new is None:
+        raise OSError("未找到条目块: %s" % entry.eid)
+    _atomic_write_text(p, new)
+
+
+def _apply_entry_update(directory, eid, status, priority, note):
+    entries = parse_entries(directory)
+    entry = find_entry(entries, eid)
+    if entry is None:
+        print("[ERROR] 未找到条目: %s" % eid, file=sys.stderr)
+        return 1
+    if not (status or priority or note):
+        print("[ERROR] update 需要 --status / --priority / --note 至少一项", file=sys.stderr)
+        return 4
+    changes = []
+    if status and status != entry.status:
+        changes.append("status: %s -> %s" % (entry.status, status))
+    if priority and priority != entry.priority:
+        changes.append("priority: %s -> %s" % (entry.priority, priority))
+    if note:
+        changes.append("note 已追加到 Resolution")
+    new = edit_entry_text(_read_text(Path(entry.file_path)), entry.eid,
+                          status=status, priority=priority, note=note)
+    if new is None:
+        print("[ERROR] 未找到条目块: %s" % eid, file=sys.stderr)
+        return 1
+    _atomic_write_text(Path(entry.file_path), new)
+    print("已更新 %s：%s" % (entry.eid, "；".join(changes) or "无变化"))
+    return 0
+
+
+def cmd_update(args):
+    return _apply_entry_update(learnings_dir(args.dir), args.id,
+                               args.status, args.priority, args.note)
+
+
+def cmd_resolve(args):
+    return _apply_entry_update(learnings_dir(args.dir), args.id,
+                               "resolved", None, args.note)
 
 
 def cmd_review(args):
@@ -579,6 +695,490 @@ def cmd_extract(args):
     return 0
 
 
+# ── 知识库（kb）命令 ────────────────────────────────────────────────────────
+
+def _kb_root(args):
+    return yotta_kb.resolve_kb_root(getattr(args, "dir", None))
+
+
+def _kb_require(args):
+    root, _source = _kb_root(args)
+    yotta_kb.load_kb(root)
+    return root
+
+
+def _kb_actor(args):
+    actor = yotta_kb.resolve_actor(getattr(args, "agent", None))
+    if yotta_kb.actor_is_unknown(actor):
+        print("[提示] 未检测到智能体身份（--agent 或环境变量 YOTTA_LEARN_AGENT），记为 %s"
+              % actor)
+    return actor
+
+
+def _kb_out_json(data):
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def _kb_resolve_cat(root, slug):
+    if not slug:
+        return None
+    return yotta_kb.resolve_category(root, slug)["slug"]
+
+
+def _kb_parse_list(values):
+    out = []
+    for chunk in (values or []):
+        out.extend([v.strip() for v in str(chunk).split(",") if v.strip()])
+    return out
+
+
+def _kb_init(args):
+    root, source = _kb_root(args)
+    actor = _kb_actor(args)
+    yotta_kb.init_kb(root, actor)
+    print("已初始化知识库：%s（来源: %s）" % (root, source))
+    print("下一步: yotta-learn kb category create <slug> --name '中文名' --description '一句话说明'")
+    return 0
+
+
+def _kb_config_set(args):
+    target = Path(args.path).expanduser().resolve()
+    cfg = yotta_kb.load_config()
+    cfg["kbDir"] = str(target)
+    cfg["updated_at"] = yotta_kb.now_iso()
+    yotta_kb.save_config(cfg)
+    print("已写入配置：%s" % yotta_kb.config_path())
+    print("  kbDir = %s" % target)
+    return 0
+
+
+def _kb_config_get(args):
+    root, source = _kb_root(args)
+    print("KB 根目录: %s" % root)
+    print("来源: %s" % {"flag": "--dir", "env": "YOTTA_LEARN_KB",
+                        "config": "配置文件", "default": "默认"}.get(source, source))
+    if yotta_kb.is_initialized(root):
+        kb_meta = yotta_kb.load_kb(root)
+        print("库状态: 已初始化（schema %s，%d 条条目）"
+              % (kb_meta.get("schema"), yotta_kb.count_entries(root)))
+    else:
+        print("库状态: 未初始化（运行 yotta-learn kb init）")
+    return 0
+
+
+def _kb_config_clear(args):
+    p = yotta_kb.config_path()
+    if p.exists():
+        p.unlink()
+        print("已清除配置：%s" % p)
+    else:
+        print("配置文件不存在（无需清除）：%s" % p)
+    return 0
+
+
+def _kb_category_create(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    cat = yotta_kb.create_category(root, args.slug, args.name, args.description,
+                                   args.alias or [], actor)
+    print("已创建分类 %s（%s）" % (cat["slug"], cat["name"]))
+    return 0
+
+
+def _kb_category_list(args):
+    root = _kb_require(args)
+    cats = yotta_kb.list_categories(root)
+    if args.json:
+        _kb_out_json(cats)
+        return 0
+    if not cats:
+        print("（暂无分类）")
+        return 0
+    for cat in cats:
+        flag = "" if cat.get("status") == "active" else " [%s]" % cat.get("status")
+        aliases = ("  别名: %s" % ", ".join(cat.get("aliases", []))) if cat.get("aliases") else ""
+        print("%-24s %-16s%s %s%s"
+              % (cat["slug"], cat["name"], flag, cat["description"], aliases))
+    print("共 %d 个分类" % len(cats))
+    return 0
+
+
+def _kb_category_rename(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    cat = yotta_kb.rename_category(root, args.slug, args.name, actor)
+    print("已重命名分类 %s -> %s" % (cat["slug"], cat["name"]))
+    return 0
+
+
+def _kb_category_merge(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    result = yotta_kb.merge_category(root, args.slug, args.into, actor)
+    print("已合并分类 %s -> %s（迁移 %d 条；%s 变为别名）"
+          % (result["from"], result["into"], result["moved"], result["from"]))
+    return 0
+
+
+def _kb_category_deprecate(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    cat = yotta_kb.deprecate_category(root, args.slug, actor,
+                                      reason=args.reason or "", force=args.force)
+    print("已停用分类 %s（%s）" % (cat["slug"], cat["name"]))
+    return 0
+
+
+def _kb_add(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    tags = _kb_parse_list(args.tags)
+    entry = yotta_kb.add_entry(root, args.category, args.title, args.message,
+                               tags, args.source, args.evidence,
+                               args.confidence, actor)
+    text = "\n".join([entry.title, " ".join(entry.tags), entry.body])
+    findings = yotta_kb.scan_sensitive(text)
+    similar = yotta_kb.similar_titles(root, entry)
+    if args.json:
+        _kb_out_json({
+            "id": entry.id, "path": str(entry.path), "status": entry.status,
+            "category": entry.category, "sensitive": findings, "similar": similar,
+        })
+        return 0
+    print("已写入草稿 %s -> %s" % (entry.id, entry.path))
+    if findings:
+        kinds = ", ".join(sorted(set(f["kind"] for f in findings)))
+        print("[敏感] 命中 %d 处（%s）：review 通过将被阻断，需 --force --note 放行"
+              % (len(findings), kinds))
+    if similar:
+        print("[查重] 标题相近：%s"
+              % ", ".join("%s(%.2f)" % (s["id"], s["similarity"]) for s in similar))
+    print("下一步: yotta-learn kb review %s（三问清单）" % entry.id)
+    return 0
+
+
+def _kb_list(args):
+    root = _kb_require(args)
+    cat_slug = _kb_resolve_cat(root, args.category)
+    tags = [t.lower() for t in _kb_parse_list(args.tag)]
+    entries = []
+    for entry in yotta_kb.iter_entries(root, category=cat_slug):
+        if args.status and entry.status != args.status:
+            continue
+        if tags and not any(t in [x.lower() for x in entry.tags] for t in tags):
+            continue
+        entries.append(entry)
+    entries.sort(key=lambda e: (e.updated, e.id), reverse=True)
+    if args.limit and args.limit > 0:
+        entries = entries[:args.limit]
+    if args.json:
+        _kb_out_json([e.to_dict() for e in entries])
+        return 0
+    if not entries:
+        print("（无匹配条目）")
+        return 0
+    for entry in entries:
+        print("%-18s %-10s %-8s %-20s %s"
+              % (entry.id, entry.status, entry.confidence, entry.category, entry.title))
+    print("共 %d 条" % len(entries))
+    return 0
+
+
+def _kb_show(args):
+    root = _kb_require(args)
+    entry = yotta_kb.find_entry(root, args.id)
+    if entry is None:
+        raise yotta_kb.KbNotFound("未找到条目：%s" % args.id)
+    if args.json:
+        _kb_out_json(entry.to_dict(include_body=True))
+        return 0
+    print("ID: %s" % entry.id)
+    print("标题: %s" % entry.title)
+    print("分类: %s" % entry.category)
+    print("状态: %s / confidence: %s" % (entry.status, entry.confidence))
+    print("标签: %s" % (", ".join(entry.tags) or "-"))
+    print("出处: %s" % (entry.fields.get("source") or "-"))
+    print("证据: %s" % (entry.fields.get("evidence") or "-"))
+    print("作者: %s / 创建: %s / 更新: %s"
+          % (entry.fields.get("author") or "-", entry.fields.get("created") or "-",
+             entry.fields.get("updated") or "-"))
+    if entry.fields.get("verified_by"):
+        print("核验: %s @ %s" % (entry.fields.get("verified_by"), entry.fields.get("verified_at")))
+    print("路径: %s" % entry.path)
+    print("")
+    print(entry.body)
+    return 0
+
+
+def _kb_update(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    changes = {}
+    if args.title is not None:
+        changes["title"] = args.title
+    if args.message is not None:
+        changes["message"] = args.message
+    if args.tags is not None:
+        changes["tags"] = _kb_parse_list(args.tags)
+    if args.source is not None:
+        changes["source"] = args.source
+    if args.evidence is not None:
+        changes["evidence"] = args.evidence
+    if args.confidence is not None:
+        changes["confidence"] = args.confidence
+    entry = yotta_kb.update_entry(root, args.id, changes, actor)
+    print("已更新 %s（字段: %s）" % (entry.id, ", ".join(sorted(changes.keys()))))
+    return 0
+
+
+def _kb_deprecate(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    entry = yotta_kb.deprecate_entry(root, args.id, args.reason, actor)
+    print("已停用条目 %s（原因已记入审计）" % entry.id)
+    return 0
+
+
+def _kb_review(args):
+    root = _kb_require(args)
+    if not args.pass_ and not args.reject:
+        entry = yotta_kb.find_entry(root, args.id)
+        if entry is None:
+            raise yotta_kb.KbNotFound("未找到条目：%s" % args.id)
+        print("质检三问（%s）：" % entry.id)
+        print("  1) 验证过？—— 有可验证的证据（--evidence）")
+        print("  2) 自包含？—— 不依赖会话上下文即可复用")
+        print("  3) 无敏感？—— 无密钥 / 个人信息 / 本机路径")
+        print("当前证据: %s" % (entry.fields.get("evidence") or "（无）"))
+        print("下一步: --pass 核验 / --reject --note '原因'")
+        return 0
+    actor = _kb_actor(args)
+    decision = "pass" if args.pass_ else "reject"
+    entry, extra = yotta_kb.review_entry(root, args.id, decision, args.note,
+                                         args.evidence, actor, force=args.force)
+    if decision == "pass":
+        print("已核验 %s（%s）" % (entry.id, entry.title))
+        if extra.get("findings"):
+            print("[敏感] --force 放行 %d 处命中（已记审计）" % len(extra["findings"]))
+        if extra.get("similar"):
+            print("[查重] 标题相近：%s"
+                  % ", ".join("%s(%.2f)" % (s["id"], s["similarity"])
+                              for s in extra["similar"]))
+    else:
+        print("已拒绝 %s 并移入回收站" % entry.id)
+    return 0
+
+
+def _kb_query(args):
+    root = _kb_require(args)
+    statuses = _kb_parse_list([args.status]) if args.status else None
+    tags = _kb_parse_list(args.tag)
+    result = yotta_kb_index.query(
+        root, " ".join(args.keywords), category=args.category, statuses=statuses,
+        tags=tags, limit=args.limit, include_draft=args.include_draft,
+        include_deprecated=args.include_deprecated)
+    if args.json:
+        _kb_out_json(result)
+        return 0
+    if result["stale"]:
+        print("[警告] 索引漂移，已降级线性扫描；建议运行 kb index rebuild")
+    if not result["results"]:
+        print("（无匹配结果）")
+        return 0
+    for item in result["results"]:
+        print("%8.2f  %-18s [%-10s] %s (%s)"
+              % (item["score"], item["id"], item["status"], item["title"],
+                 item["category"]))
+    print("共 %d 条（显示 %d；模式: %s）"
+          % (result["count"], len(result["results"]), result["mode"]))
+    return 0
+
+
+def _kb_index_rebuild(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    with yotta_kb.KbLock(root):
+        stats = yotta_kb_index.rebuild_all(root)
+        yotta_kb.audit(root, actor, "kb.index.rebuild", str(root), "ok",
+                       {"entries": stats["total_entries"], "terms": stats["terms"]})
+    print("索引已重建：%d 条条目 / %d 个词条" % (stats["total_entries"], stats["terms"]))
+    return 0
+
+
+def _kb_index_status(args):
+    root = _kb_require(args)
+    status = yotta_kb_index.index_status(root)
+    if args.json:
+        _kb_out_json(status)
+        return 0
+    for item in status["categories"]:
+        flag = "漂移" if item["drift"] else "一致"
+        print("%-24s %-6s 条目 %-4d 构建于 %s"
+              % (item["slug"], flag, item["entries"], item["built_at"] or "-"))
+    print("全局词表: %s" % ("漂移" if status["global_drift"] else "一致"))
+    print("总体: %s" % ("漂移（运行 kb index rebuild）" if status["drift"] else "健康"))
+    return 0
+
+
+def _kb_stats(args):
+    root = _kb_require(args)
+    data = yotta_kb_index.stats(root)
+    if args.json:
+        _kb_out_json(data)
+        return 0
+    print("知识库统计（%s）" % data["root"])
+    print("  分类: %d / 条目: %d / 回收站: %d" % (data["categories"], data["total"], data["trash"]))
+    print("  状态: %s" % ", ".join("%s=%d" % (k, v) for k, v in sorted(data["by_status"].items())))
+    for slug, meta in sorted(data["by_category"].items()):
+        print("  %-24s %-16s %d 条%s"
+              % (slug, meta["name"], meta["entries"],
+                 "" if meta["status"] == "active" else " [%s]" % meta["status"]))
+    print("  索引: %s" % ("漂移（运行 kb index rebuild）" if data["index_drift"] else "健康"))
+    return 0
+
+
+def _kb_doctor(args):
+    root = _kb_require(args)
+    report = yotta_kb.doctor(root, backup_dir=args.backup_dir)
+    if args.json:
+        _kb_out_json(report)
+    else:
+        for check in report["checks"]:
+            print("[%s] %s%s" % (check["status"], check["name"],
+                                 ("：%s" % check["detail"]) if check["detail"] else ""))
+        print("doctor: 错误 %d / 警告 %d" % (report["errors"], report["warnings"]))
+    return 0 if report["errors"] == 0 else 1
+
+
+def _kb_backup_create(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    dest, manifest = yotta_kb.backup_create(root, args.out, actor)
+    print("已创建备份：%s" % dest)
+    print("  条目 %d / 文件 %d" % (manifest["entries"], len(manifest["files"])))
+    return 0
+
+
+def _kb_backup_list(args):
+    items = yotta_kb.backup_list(args.out)
+    if args.json:
+        _kb_out_json(items)
+        return 0
+    if not items:
+        print("（无备份）：%s" % args.out)
+        return 0
+    for item in items:
+        print("%-40s %-22s 条目 %-5d 文件 %d"
+              % (item["name"], item["created"], item["entries"], item["files"]))
+    print("共 %d 份" % len(items))
+    return 0
+
+
+def _kb_backup_restore(args):
+    actor = _kb_actor(args)
+    target = yotta_kb.backup_restore(args.out, args.name, args.into, actor,
+                                     force=args.force)
+    print("已恢复备份 %s -> %s" % (args.name, target))
+    return 0
+
+
+def _kb_trash_list(args):
+    root = _kb_require(args)
+    items = yotta_kb.list_trash(root)
+    if args.json:
+        _kb_out_json(items)
+        return 0
+    if not items:
+        print("（回收站为空）")
+        return 0
+    for item in items:
+        print("%-56s %.1f 天" % (item["name"], item["age_days"]))
+    print("共 %d 项（保留 %d 天）" % (len(items), yotta_kb.TRASH_RETENTION_DAYS))
+    return 0
+
+
+def _kb_trash_purge(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    result = yotta_kb.purge_trash(root, actor, days=args.days, purge_all=args.all)
+    print("回收站清理：删除 %d / 保留 %d" % (result["removed"], result["kept"]))
+    return 0
+
+
+def _kb_snapshot_list(args):
+    root = _kb_require(args)
+    items = yotta_kb.list_snapshots(root)
+    if args.json:
+        _kb_out_json(items)
+        return 0
+    if not items:
+        print("（暂无快照）")
+        return 0
+    for item in items:
+        print("%-44s %-22s %-16s %d 文件"
+              % (item["name"], item["created"], item["op"], item["files"]))
+    print("共 %d 个（保留最近 %d 个）" % (len(items), yotta_kb.SNAPSHOT_KEEP))
+    return 0
+
+
+def _kb_snapshot_restore(args):
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    name = yotta_kb.restore_snapshot(root, args.name, actor)
+    print("已恢复快照 %s（恢复前状态已自动快照）" % name)
+    return 0
+
+
+KB_COMMANDS = {
+    "init": _kb_init,
+    "config_set": _kb_config_set,
+    "config_get": _kb_config_get,
+    "config_clear": _kb_config_clear,
+    "category_create": _kb_category_create,
+    "category_list": _kb_category_list,
+    "category_rename": _kb_category_rename,
+    "category_merge": _kb_category_merge,
+    "category_deprecate": _kb_category_deprecate,
+    "add": _kb_add,
+    "list": _kb_list,
+    "show": _kb_show,
+    "update": _kb_update,
+    "deprecate": _kb_deprecate,
+    "review": _kb_review,
+    "query": _kb_query,
+    "index_rebuild": _kb_index_rebuild,
+    "index_status": _kb_index_status,
+    "stats": _kb_stats,
+    "doctor": _kb_doctor,
+    "backup_create": _kb_backup_create,
+    "backup_list": _kb_backup_list,
+    "backup_restore": _kb_backup_restore,
+    "trash_list": _kb_trash_list,
+    "trash_purge": _kb_trash_purge,
+    "snapshot_list": _kb_snapshot_list,
+    "snapshot_restore": _kb_snapshot_restore,
+}
+
+
+def cmd_kb(args):
+    name = args.kb_command
+    nested = {
+        "config": "kb_config_command",
+        "category": "kb_category_command",
+        "index": "kb_index_command",
+        "backup": "kb_backup_command",
+        "trash": "kb_trash_command",
+        "snapshot": "kb_snapshot_command",
+    }
+    if name in nested:
+        name = "%s_%s" % (name, getattr(args, nested[name]))
+    handler = KB_COMMANDS.get(name)
+    if handler is None:
+        print("[ERROR] 未知 kb 子命令: %s" % name, file=sys.stderr)
+        return 4
+    return handler(args)
+
+
 # ── 参数解析与入口 ──────────────────────────────────────────────────────────
 
 class _LearnParser(argparse.ArgumentParser):
@@ -632,17 +1232,200 @@ def build_parser():
     p_extract.add_argument("--dry-run", action="store_true")
     p_extract.add_argument("--dir")
 
+    p_update = sub.add_parser("update", help="更新条目状态 / 优先级 / 处置说明")
+    p_update.add_argument("id")
+    p_update.add_argument("--status", choices=STATUSES)
+    p_update.add_argument("--priority", choices=PRIORITIES)
+    p_update.add_argument("--note", help="处置说明（追加到 Resolution）")
+    p_update.add_argument("--dir")
+
+    p_resolve = sub.add_parser("resolve", help="标记条目已解决（= update --status resolved）")
+    p_resolve.add_argument("id")
+    p_resolve.add_argument("--note", help="处置说明（追加到 Resolution）")
+    p_resolve.add_argument("--dir")
+
+    p_kb = sub.add_parser("kb", help="知识库（分类 / 条目 / 索引 / 查询 / 审核）")
+    kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)
+
+    def kb_dir(p):
+        p.add_argument("--dir", help="知识库根目录（优先级: --dir > YOTTA_LEARN_KB > 配置 > 默认）")
+
+    def kb_agent(p):
+        p.add_argument("--agent", help="写入身份（默认环境变量 YOTTA_LEARN_AGENT）")
+
+    p = kb_sub.add_parser("init", help="初始化知识库（已存在拒绝覆盖）")
+    kb_dir(p)
+    kb_agent(p)
+
+    p = kb_sub.add_parser("config", help="知识库位置配置")
+    cfg_sub = p.add_subparsers(dest="kb_config_command", required=True)
+    p2 = cfg_sub.add_parser("set", help="持久化 KB 根目录（任意位置）")
+    p2.add_argument("--dir", dest="path", required=True, metavar="PATH")
+    cfg_sub.add_parser("get", help="显示解析结果与来源")
+    cfg_sub.add_parser("clear", help="清除持久化配置")
+
+    p = kb_sub.add_parser("category", help="分类注册表")
+    cat_sub = p.add_subparsers(dest="kb_category_command", required=True)
+    p2 = cat_sub.add_parser("create", help="创建分类")
+    p2.add_argument("slug")
+    p2.add_argument("--name", required=True)
+    p2.add_argument("--description", required=True)
+    p2.add_argument("--alias", action="append", help="别名（可重复）")
+    kb_dir(p2)
+    kb_agent(p2)
+    p2 = cat_sub.add_parser("list", help="列出分类")
+    p2.add_argument("--json", action="store_true")
+    kb_dir(p2)
+    p2 = cat_sub.add_parser("rename", help="重命名分类（显示名）")
+    p2.add_argument("slug")
+    p2.add_argument("--name", required=True)
+    kb_dir(p2)
+    kb_agent(p2)
+    p2 = cat_sub.add_parser("merge", help="合并分类（迁移条目 + 留别名）")
+    p2.add_argument("slug")
+    p2.add_argument("--into", required=True)
+    kb_dir(p2)
+    kb_agent(p2)
+    p2 = cat_sub.add_parser("deprecate", help="停用分类（空分类或 --force）")
+    p2.add_argument("slug")
+    p2.add_argument("--reason", default="")
+    p2.add_argument("--force", action="store_true")
+    kb_dir(p2)
+    kb_agent(p2)
+
+    p = kb_sub.add_parser("add", help="写入知识条目（默认草稿）")
+    p.add_argument("--category", required=True)
+    p.add_argument("--title", required=True)
+    p.add_argument("--message", required=True)
+    p.add_argument("--tags", action="append", help="标签（逗号分隔，可重复）")
+    p.add_argument("--source", required=True, help="出处（URL / 文件 / 会话）")
+    p.add_argument("--evidence", default="")
+    p.add_argument("--confidence", choices=list(yotta_kb.CONFIDENCES), default="medium")
+    p.add_argument("--json", action="store_true")
+    kb_dir(p)
+    kb_agent(p)
+
+    p = kb_sub.add_parser("list", help="列出条目（管理视图）")
+    p.add_argument("--category")
+    p.add_argument("--status", choices=list(yotta_kb.ENTRY_STATUSES))
+    p.add_argument("--tag", action="append")
+    p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--json", action="store_true")
+    kb_dir(p)
+
+    p = kb_sub.add_parser("show", help="查看条目全文")
+    p.add_argument("id")
+    p.add_argument("--json", action="store_true")
+    kb_dir(p)
+
+    p = kb_sub.add_parser("update", help="更新条目字段")
+    p.add_argument("id")
+    p.add_argument("--title")
+    p.add_argument("--message")
+    p.add_argument("--tags", action="append")
+    p.add_argument("--source")
+    p.add_argument("--evidence")
+    p.add_argument("--confidence", choices=list(yotta_kb.CONFIDENCES))
+    kb_dir(p)
+    kb_agent(p)
+
+    p = kb_sub.add_parser("deprecate", help="停用条目（保留可查）")
+    p.add_argument("id")
+    p.add_argument("--reason", required=True)
+    kb_dir(p)
+    kb_agent(p)
+
+    p = kb_sub.add_parser("review", help="审核门（三问清单 / --pass / --reject）")
+    p.add_argument("id")
+    review_group = p.add_mutually_exclusive_group()
+    review_group.add_argument("--pass", dest="pass_", action="store_true")
+    review_group.add_argument("--reject", action="store_true")
+    p.add_argument("--note", default="")
+    p.add_argument("--evidence", default="")
+    p.add_argument("--force", action="store_true")
+    kb_dir(p)
+    kb_agent(p)
+
+    p = kb_sub.add_parser("query", help="关键词查询（默认只出已核验）")
+    p.add_argument("keywords", nargs="+")
+    p.add_argument("--category")
+    p.add_argument("--status", help="状态过滤（逗号分隔；默认 verified）")
+    p.add_argument("--tag", action="append")
+    p.add_argument("--limit", type=int, default=10, help="返回条数（0 = 不限）")
+    p.add_argument("--include-draft", action="store_true")
+    p.add_argument("--include-deprecated", action="store_true")
+    p.add_argument("--json", action="store_true")
+    kb_dir(p)
+
+    p = kb_sub.add_parser("index", help="索引管理")
+    idx_sub = p.add_subparsers(dest="kb_index_command", required=True)
+    p2 = idx_sub.add_parser("rebuild", help="全量重建索引")
+    kb_dir(p2)
+    kb_agent(p2)
+    p2 = idx_sub.add_parser("status", help="索引健康状态")
+    p2.add_argument("--json", action="store_true")
+    kb_dir(p2)
+
+    p = kb_sub.add_parser("stats", help="统计")
+    p.add_argument("--json", action="store_true")
+    kb_dir(p)
+
+    p = kb_sub.add_parser("doctor", help="体检")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--backup-dir", dest="backup_dir")
+    kb_dir(p)
+
+    p = kb_sub.add_parser("backup", help="备份（独立目标目录）")
+    bk_sub = p.add_subparsers(dest="kb_backup_command", required=True)
+    p2 = bk_sub.add_parser("create", help="创建备份")
+    p2.add_argument("--out", required=True)
+    kb_dir(p2)
+    kb_agent(p2)
+    p2 = bk_sub.add_parser("list", help="列出备份")
+    p2.add_argument("--out", required=True)
+    p2.add_argument("--json", action="store_true")
+    p2 = bk_sub.add_parser("restore", help="从备份恢复（目标非空需 --force）")
+    p2.add_argument("name")
+    p2.add_argument("--out", required=True)
+    p2.add_argument("--into", required=True)
+    p2.add_argument("--force", action="store_true")
+    kb_agent(p2)
+
+    p = kb_sub.add_parser("trash", help="回收站")
+    tr_sub = p.add_subparsers(dest="kb_trash_command", required=True)
+    p2 = tr_sub.add_parser("list", help="列出回收站")
+    p2.add_argument("--json", action="store_true")
+    kb_dir(p2)
+    p2 = tr_sub.add_parser("purge", help="清理过期回收站（默认 7 天）")
+    p2.add_argument("--days", type=int, default=yotta_kb.TRASH_RETENTION_DAYS)
+    p2.add_argument("--all", action="store_true")
+    kb_dir(p2)
+    kb_agent(p2)
+
+    p = kb_sub.add_parser("snapshot", help="快照（破坏性操作前自动创建）")
+    sn_sub = p.add_subparsers(dest="kb_snapshot_command", required=True)
+    p2 = sn_sub.add_parser("list", help="列出快照")
+    p2.add_argument("--json", action="store_true")
+    kb_dir(p2)
+    p2 = sn_sub.add_parser("restore", help="恢复快照")
+    p2.add_argument("name")
+    kb_dir(p2)
+    kb_agent(p2)
+
     return ap
 
 
 COMMANDS = {
     "init": cmd_init,
     "log": cmd_log,
+    "update": cmd_update,
+    "resolve": cmd_resolve,
     "list": cmd_list,
     "promote": cmd_promote,
     "review": cmd_review,
     "stats": cmd_stats,
     "extract": cmd_extract,
+    "kb": cmd_kb,
 }
 
 
@@ -654,6 +1437,9 @@ def main(argv=None):
         ap.error("未知命令: %s" % args.command)
     try:
         return cmd(args)
+    except yotta_kb.KbError as e:
+        print("[ERROR] %s" % e.message, file=sys.stderr)
+        return e.code
     except OSError as e:
         print("[ERROR] 文件操作失败: %s" % e, file=sys.stderr)
         return 4

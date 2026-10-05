@@ -1,7 +1,7 @@
 ---
 name: yotta-learn
-version: 0.2.2
-description: 元习 —— 跨智能体的学习闭环技能：把错误、纠正与洞见沉淀为 .learnings/ 条目，供后续会话与技能改进复用。触发：命令失败、用户纠正、发现更好的做法、请求缺失能力、外部接口故障、知识过时、需要沉淀经验时；或用户说 记一笔/学习/沉淀/self-improvement/learnings 等。边界：不写入私密/敏感信息（除非用户明确要求）；不自动改动系统文件。
+version: 0.3.0
+description: 元习 —— 跨智能体的学习闭环 + 知识库技能：把错误、纠正与洞见沉淀为 .learnings/ 条目，把验证过的知识存入分类索引的知识库（关键词查询）。触发：命令失败、用户纠正、发现更好的做法、请求缺失能力、外部接口故障、知识过时、需要沉淀或查询知识时；或用户说 记一笔/学习/沉淀/知识库/kb/查知识/self-improvement/learnings 等。边界：不写入私密/敏感信息（除非用户明确要求）；不自动改动系统文件。
 license: MIT
 ---
 
@@ -10,8 +10,8 @@ license: MIT
 把「这次学到的」变成「下次可复用的」：记录错误、纠正与洞见，供后续会话与技能改进复用。
 
 - **沉淀**：log 命令把条目写入 .learnings/（LEARNINGS / ERRORS / FEATURE_REQUESTS），自动编号 + 时间戳。
-- **复用**：list / review / stats 回看与统计；promote 把重要条目提升到 AGENTS.md / CLAUDE.md。
-- **改进**：extract 由高价值条目生成新技能骨架；Pattern-Key 追踪复发模式。
+- **闭环**：update / resolve 更新条目状态与处置；list / review / stats 回看与统计；promote 提升到 AGENTS.md / CLAUDE.md；extract 生成技能骨架；Pattern-Key 追踪复发模式。
+- **知识库（KB）**：kb 命令组把验证过的知识沉淀为分类条目 —— 分类注册、草稿 / 核验、分片索引、关键词查询、审计、回收站、快照与备份；任何智能体经 CLI 读写。
 - **联动**：log --remember 可选同步到 yotta-memory（元忆），未安装/失败自动降级，绝不阻断本地记录。
 
 零依赖（Python 3.8+ 标准库），Windows + Linux 通用。
@@ -24,8 +24,10 @@ license: MIT
 - 用户请求了尚不存在的能力；
 - 解决了一个不显然的问题，值得沉淀；
 - 开始重要任务前，先 review 待处理条目。
+- 想把一条验证过的经验 / 知识沉淀给其他会话或其他智能体复用；
+- 需要按关键词查询已有知识（如「发布流程」「SQLite 检索」）。
 
-**Do NOT trigger**：不记录私密信息（令牌、密钥、环境变量值、完整源码）除非用户明确要求；推荐用摘要或脱敏片段。
+**Do NOT trigger**：不记录私密信息（令牌、密钥、环境变量值、完整源码）除非用户明确要求；推荐用摘要或脱敏片段。知识库只存知识不存私密：审核门会扫描密钥 / 个人信息 / 本机路径并阻断。
 
 `--category` 是固定枚举：`correction` / `insight` / `knowledge_gap` / `best_practice` / `error` / `other`。
 不确定时用 `other`；非法值会退出码 4 并列出全部可用值。
@@ -53,11 +55,26 @@ python3 scripts/yotta_learn.py stats
 # 提升到 AGENTS.md / CLAUDE.md（自动去重）
 python3 scripts/yotta_learn.py promote LRN-20260826-001
 
+# 闭环：更新状态 / 处置说明（resolve = update --status resolved）
+python3 scripts/yotta_learn.py update LRN-20260826-001 --status in_progress --note "处理中"
+python3 scripts/yotta_learn.py resolve LRN-20260826-001 --note "已修复并回归"
+
 # 由条目生成技能骨架
 python3 scripts/yotta_learn.py extract LRN-20260826-001 --slug my-skill --dry-run
 
 # 可选：同步到元忆（yotta-memory），未安装自动降级
 python3 scripts/yotta_learn.py log --message "..." --remember
+
+# 知识库：初始化 → 分类 → 写入草稿 → 核验 → 查询
+python3 scripts/yotta_learn.py kb init
+python3 scripts/yotta_learn.py kb category create agent-skills \
+  --name "智能体与技能开发" --description "技能开发与编排相关知识与方法"
+python3 scripts/yotta_learn.py kb add --category agent-skills \
+  --title "SQLite FTS5 中文检索的坑" \
+  --message "默认分词对中文不友好，需要 bigram 或外部分词器。" \
+  --tags "sqlite,检索" --source "experiment"
+python3 scripts/yotta_learn.py kb review KB-20261005-001 --pass --evidence "本地实测通过"
+python3 scripts/yotta_learn.py kb query 中文检索
 ```
 
 ## 数据协议（.learnings/）
@@ -67,6 +84,15 @@ python3 scripts/yotta_learn.py log --message "..." --remember
 - ID：LRN/ERR/FEAT-YYYYMMDD-XXX（同一天自增）。
 - 字段：Logged / Priority / Status / Area / Pattern-Key；正文分 Summary 与 Details。
 - 兼容：已有用户数据保留，初始化绝不覆盖；旧格式条目可读。
+
+## 知识库（KB v1）
+
+- 位置：默认 `~/.yottaskills/knowledge`；优先级 `--dir` > `YOTTA_LEARN_KB` > 配置（`kb config set --dir <路径>`）> 默认。
+- 结构：`categories/<slug>/`（category.json + entries/ + index.json）+ `index/`（全局词表 / 统计）+ `audit/` + `.trash/` + `snapshots/`。
+- 条目：Markdown + 受控 frontmatter（单行键值；字符串单引号；数组 JSON）；ID `KB-YYYYMMDD-XXX`。
+- 状态机：draft（默认）→ verified（review --pass 需证据）→ deprecated；reject 入回收站（保留 7 天）。
+- 查询：中文 bigram + 单字兜底；默认只出 verified；索引漂移自动降级线性扫描。
+- 完整命令面、协议与可靠性说明：references/kb.md。
 
 ## 元忆联动（可选）
 
@@ -83,10 +109,11 @@ OpenClaw（openclaw-setup.md）；activator.sh / error-detector.sh 为 Linux-onl
 ## 参考
 
 - references/examples.md — 记录示例与字段说明
+- references/kb.md — 知识库完整命令面、数据协议与可靠性说明
 - references/hooks-setup.md — 各智能体 hook 接入详细步骤
 - references/walkthroughs.md — 命令失败 / 用户纠正 / 接口降级三类复杂走查
 - references/faq.md — 常见问题速查与安装排障
 
 ## 常见问题（速查）
 
-条目写哪、重复问题、私密信息、元忆联动失败、hook 不生效时，先看 references/faq.md。
+条目写哪、重复问题、私密信息、知识库位置 / 审核门、元忆联动失败、hook 不生效时，先看 references/faq.md。

@@ -1,5 +1,13 @@
 # 更新日志
 
+## v0.3.0 (2026-10-05)
+
+- 知识库（KB v1）：新增 `kb` 命令组 —— 分类注册（别名 / 合并 / 停用）、条目（草稿 / 核验 / 停用）、受控 frontmatter 协议、中文 bigram + 单字兜底分片索引、关键词查询（默认只出已核验）、审计、回收站（7 天）、快照（破坏性操作前自动）、独立目录备份、doctor 体检。
+- 学习闭环补全：新增 `update`（状态 / 优先级 / 处置说明）与 `resolve` 快捷命令；修复多条目文件中提升第 2+ 条时 Promoted-To 写入错块的缺陷。
+- 可靠性：原子写 + 跨进程写锁（过期接管）+ init 防覆盖（库已存在拒绝）+ 索引漂移自动降级线性扫描 + `kb index rebuild` / `status`。
+- 测试：新增 `scripts/test_yotta_kb.py`（25 项）并扩展 `scripts/test_yotta_learn.py`（20 项）；`npm test` 链更新。
+- 文档：SKILL / README（中英）/ FAQ 更新，新增 `references/kb.md` 完整参考。
+
 ## v0.2.2 (2026-10-01)
 
 - 安装器卫生批次：`bin/install.js` / `install.sh` 统一（未知参数报错 exit 2、`--help` / `--version`、残留清理白名单、嵌套载荷保留）；由模板单一真源渲染，接入漂移门禁。

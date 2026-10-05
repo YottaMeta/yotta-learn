@@ -6,8 +6,8 @@
 
 <h1 align="center">yotta-learn · 元习</h1>
 
-<p align="center">YottaMeta's cross-agent <b>learning-loop</b> skill: turns mistakes, corrections and insights into reusable <b>.learnings/</b> entries for later sessions and skill improvement. Suited for command failures, user corrections, discovering a better practice, requesting a missing capability, external-interface failures, and stale knowledge.</p>
-<p align="center">Activates on command failure / user correction / a better approach / a missing capability / an external-interface failure / stale knowledge / a need to capture experience, or when the user says 记一笔 / learn / 沉淀 / self-improvement / learnings — judged by whether experience should be captured, not by keyword luck.</p>
+<p align="center">YottaMeta's cross-agent <b>learning-loop + knowledge base</b> skill: turns mistakes, corrections and insights into reusable <b>.learnings/</b> entries, and keeps verified knowledge in a categorized, indexed, keyword-searchable <b>knowledge base</b>. Suited for command failures, user corrections, discovering a better practice, requesting a missing capability, external-interface failures, stale knowledge, and capturing or querying reusable knowledge.</p>
+<p align="center">Activates on command failure / user correction / a better approach / a missing capability / an external-interface failure / stale knowledge / a need to capture or query knowledge, or when the user says 记一笔 / learn / 沉淀 / 知识库 / kb / self-improvement / learnings — judged by whether experience should be captured, not by keyword luck.</p>
 <p align="center">Python 3.8+ standard library, zero dependencies; Windows + Linux; init never overwrites existing .learnings/ data.</p>
 
 <p align="center">
@@ -21,15 +21,16 @@
 
 ## What it is
 
-The most common waste for an AI agent is repeating the same mistake across sessions. Yuanxi turns "what I learned this time" into "reusable next time": it captures mistakes, corrections and insights as project-local .learnings/ entries for later sessions to review, aggregate and reuse.
+The most common waste for an AI agent is repeating the same mistake across sessions. Yuanxi turns "what I learned this time" into "reusable next time": it captures mistakes, corrections and insights as project-local .learnings/ entries for later sessions to review, aggregate and reuse — and keeps verified, reusable knowledge in a categorized knowledge base with indexed keyword search.
 
 It is not tied to one platform — it is an agent-agnostic CLI toolkit: install it into any agent that supports Agent Skills, and it only writes to the .learnings/ directory you specify. No dependency is added to package.json.
 
 ## Core value
 
 - **Capture** — the log command writes entries into .learnings/ (LEARNINGS / ERRORS / FEATURE_REQUESTS), auto-numbered and timestamped.
-- **Reuse** — list / review / stats to review and aggregate; promote lifts important entries into AGENTS.md / CLAUDE.md.
+- **Close the loop** — update / resolve change entry status and resolution notes; list / review / stats review and aggregate; promote lifts important entries into AGENTS.md / CLAUDE.md.
 - **Improve** — extract builds a new skill skeleton from high-value entries; Pattern-Key tracks recurring patterns.
+- **Knowledge base** — the kb command group stores verified knowledge as categorized entries with sharded indexing and keyword search; writes default to draft, review promotes to verified, queries return verified by default.
 - **Optional integration** — log --remember optionally syncs to yotta-memory; degrades gracefully when not installed / failed, and never blocks local capture.
 - **No overwrite** — init never touches existing .learnings/ data; old-format entries remain readable.
 
@@ -42,6 +43,8 @@ It is not tied to one platform — it is an agent-agnostic CLI toolkit: install 
 | **Optional integration** | Connects to 元忆 but degrades A/B/C when not installed / uninitialized / failed, never blocks local capture |
 | **Idempotent init** | init can be re-run without overwriting existing entries |
 | **Auto-dedup** | promote / extract deduplicate automatically |
+| **Searchable knowledge base** | Categories + sharded index + Chinese bigram keyword search; any agent reads and writes the same KB via CLI |
+| **Reliability built in** | Atomic writes + cross-process lock + 7-day trash + snapshots + independent-directory backup + doctor checks |
 | **Zero dependency** | Python 3.8+ standard library; no daemon / no database; Windows + Linux |
 | **Ecosystem distribution** | GitHub + npm dual-source; four install methods (npx / git clone / Download ZIP / install.sh) |
 
@@ -51,9 +54,11 @@ It is not tied to one platform — it is an agent-agnostic CLI toolkit: install 
 |---|---|
 | init | Initialize .learnings/ (idempotent, never overwrites existing files) |
 | log | Record a learning / error / feature request (auto ID like LRN-20260826-001) |
+| update / resolve | Update entry status / priority / resolution note (resolve marks it resolved) |
 | list / review / stats | Review and aggregate entries |
 | promote | Lift important entries into AGENTS.md / CLAUDE.md (auto-dedup) |
 | extract | Build a skill skeleton from high-value entries (--dry-run preview) |
+| kb | Knowledge base: init / config / category / add / review / query / index / stats / doctor / backup and more |
 | log --remember | Optional sync to yotta-memory; degrades when not installed |
 
 ## Data protocol
@@ -63,6 +68,7 @@ It is not tied to one platform — it is an agent-agnostic CLI toolkit: install 
 - ID: `LRN/ERR/FEAT-YYYYMMDD-XXX` (auto-increment per day).
 - Fields: Logged / Priority / Status / Area / Pattern-Key; body split into Summary and Details.
 - Compatibility: existing user data is preserved; init never overwrites; old-format entries readable.
+- Knowledge base: defaults to `~/.yottaskills/knowledge` (any location via `kb config set --dir <path>`); entries are Markdown with controlled frontmatter, IDs `KB-YYYYMMDD-XXX`, status draft / verified / deprecated.
 
 ## Usage
 
@@ -83,6 +89,10 @@ python3 scripts/yotta_learn.py log --type error --category error --priority medi
 python3 scripts/yotta_learn.py list
 python3 scripts/yotta_learn.py stats
 
+# Update status / resolution note (resolve = update --status resolved)
+python3 scripts/yotta_learn.py update LRN-20260826-001 --status in_progress --note "in progress"
+python3 scripts/yotta_learn.py resolve LRN-20260826-001 --note "fixed and regression-tested"
+
 # Lift an important entry into AGENTS.md / CLAUDE.md (auto-dedup)
 python3 scripts/yotta_learn.py promote ERR-20260827-003
 
@@ -91,9 +101,20 @@ python3 scripts/yotta_learn.py extract LRN-20260826-001 --slug my-skill --dry-ru
 
 # Optional: sync to yotta-memory; degrades when not installed
 python3 scripts/yotta_learn.py log --message "..." --remember
+
+# Knowledge base: init -> category -> draft -> review -> query
+python3 scripts/yotta_learn.py kb init
+python3 scripts/yotta_learn.py kb category create agent-skills \
+  --name "Agent & skill development" --description "Knowledge and methods for skill development and orchestration"
+python3 scripts/yotta_learn.py kb add --category agent-skills \
+  --title "SQLite FTS5 Chinese search pitfalls" \
+  --message "Default tokenizer is weak for Chinese; use bigrams or an external tokenizer." \
+  --tags "sqlite,search" --source "experiment"
+python3 scripts/yotta_learn.py kb review KB-20261005-001 --pass --evidence "verified locally"
+python3 scripts/yotta_learn.py kb query 中文检索
 ```
 
-**Exit-code semantics**: 0 = success; 1 = nothing found / nothing to do; 4 = usage error.
+**Exit-code semantics**: 0 = success; 1 = not found / nothing to do; 4 = usage or validation error; 5 = gate blocked (sensitive / duplicate); 6 = integrity (refused overwrite / corrupted data / lock timeout).
 **Category values**: `correction` / `insight` / `knowledge_gap` / `best_practice` / `error` / `other`; use `other` when unsure.
 
 ## Installation
