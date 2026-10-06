@@ -73,11 +73,19 @@
 
 ## 16. 知识库放在哪？怎么换位置 / 备份？
 
-默认 `~/.yottaskills/knowledge`；用 `kb config set --dir <路径>` 可指定任意位置（优先级 `--dir` > `YOTTA_LEARN_KB` > 配置 > 默认）。备份用 `kb backup create --out <目录>`，恢复用 `kb backup restore <名称> --out <目录> --into <目标>`；日常体检用 `kb doctor`（可加 `--backup-dir`）。
+默认 `~/.yottalearn/knowledge`（配置 `~/.yottalearn/config.json`）；用 `kb config set --dir <路径>` 可指定任意位置（优先级 `--dir` > `YOTTA_LEARN_KB` > 配置 > 默认）；迁移用 `kb config set --dir <新路径> --move`（复制校验后切配置，旧库移出原位），只切指针会明确提示「旧库未迁移」，可用 `--move --from <旧库>` 补迁。备份用 `kb backup create --out <目录>`，恢复用 `kb backup restore <名称> --out <目录> --into <目标>`；日常体检用 `kb doctor`（可加 `--backup-dir`）。
 
 ## 17. 审核被阻断（敏感 / 重复）怎么办？
 
 敏感命中：确认样例已脱敏后，用 `--force --note '说明'` 放行（留审计）；疑似重复：先 `kb show` 对比，确认不重复后用 `--force` 放行，或对重复条目执行 `kb deprecate` / `kb review --reject`。
+
+## 18. MCP 怎么接入？图形化面板怎么开？
+
+MCP：把 `scripts/yotta_learn_mcp.py` 配到客户端 `mcpServers`（stdio；配置示例见 SKILL.md「知识库（KB v1）」）。面板：`yotta-learn view`（默认 `127.0.0.1:8791`，仅本机；页面内嵌会话令牌，破坏性写操作需确认串，全部写操作留审计）。
+
+## 19. 怎么把 .learnings 条目升到知识库？
+
+`kb add --from-learning <LRN-ID> --category <分类>`（可用 `--learnings-dir` 指定 .learnings 所在目录）。生成的是草稿，正文含可移植来源引用，仍走同一审核门（证据 + 敏感扫描 + 查重）。
 
 ## 13. `--category` 可以填哪些值？
 

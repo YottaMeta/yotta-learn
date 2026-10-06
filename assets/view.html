@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="yotta-view-token" content="__YOTTA_VIEW_TOKEN__">
+<meta name="robots" content="noindex, nofollow">
+<title>元习知识库 · 管理台</title>
+<style>
+:root{
+  --bg:#f6f7f8; --panel:#ffffff; --line:#e3e6e9; --line-strong:#cbd1d6;
+  --ink:#1b1f23; --ink-2:#4b5560; --ink-3:#78828c;
+  --accent:#0f766e; --accent-soft:#e6f3f1; --warn:#b45309; --warn-soft:#fdf3e3;
+  --danger:#b91c1c; --danger-soft:#fdecec; --ok:#15803d; --ok-soft:#eaf6ee;
+  --radius:8px; --mono:ui-monospace,Consolas,"Cascadia Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.55 "Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--accent)}
+#app{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh}
+.side{background:var(--panel);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:14px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;gap:10px;align-items:center;padding:2px 6px}
+.logo{width:34px;height:34px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700}
+.brand strong{display:block;font-size:14px}
+.brand small{color:var(--ink-3)}
+nav{display:flex;flex-direction:column;gap:2px}
+nav button{display:flex;align-items:center;gap:9px;width:100%;border:0;background:transparent;color:var(--ink-2);padding:8px 10px;border-radius:6px;text-align:left}
+nav button svg{width:16px;height:16px;flex:none}
+nav button:hover{background:#f1f3f5;color:var(--ink)}
+nav button.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.side-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+#kbRoot{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);word-break:break-all}
+main{min-width:0;padding:18px 22px 40px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.top h1{font-size:20px;margin:0}
+.badge{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--ink-2)}
+.badge.ok{background:var(--ok-soft);border-color:#cde7d5;color:var(--ok)}
+.badge.warn{background:var(--warn-soft);border-color:#f0ddb8;color:var(--warn)}
+.grid{display:grid;gap:12px}
+.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+.metric{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.metric b{display:block;font-size:22px;line-height:1.2}
+.metric span{color:var(--ink-3);font-size:12.5px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-top:12px}
+.panel h2{font-size:14px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.panel h2 .hint{font-weight:400;color:var(--ink-3);font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--ink-3);font-weight:600;font-size:12px;white-space:nowrap}
+tr.click{cursor:pointer}
+tr.click:hover td{background:#f8fafb}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--ink-3)}
+.pill{display:inline-block;border-radius:999px;padding:1px 8px;font-size:12px;border:1px solid var(--line-strong);color:var(--ink-2);background:#fafbfc}
+.pill.verified{background:var(--ok-soft);border-color:#cde7d5;color:var(--ok)}
+.pill.draft{background:var(--warn-soft);border-color:#f0ddb8;color:var(--warn)}
+.pill.deprecated{background:#f1f3f5;color:var(--ink-3)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:120px}
+.field.grow{flex:1;min-width:220px}
+.field label{font-size:12px;color:var(--ink-3)}
+input,select,textarea{border:1px solid var(--line-strong);border-radius:6px;padding:6px 8px;background:#fff;min-width:0}
+textarea{min-height:110px;resize:vertical;font-family:var(--mono);font-size:12.5px}
+button.primary{background:var(--accent);border:1px solid var(--accent);color:#fff;border-radius:6px;padding:7px 12px}
+button.primary:hover{filter:brightness(1.05)}
+button.ghost{background:#fff;border:1px solid var(--line-strong);border-radius:6px;padding:6px 11px;color:var(--ink-2)}
+button.ghost:hover{border-color:var(--ink-3);color:var(--ink)}
+button.danger{background:var(--danger);border:1px solid var(--danger);color:#fff;border-radius:6px;padding:7px 12px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.split{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:12px;align-items:start}
+.checks{max-height:300px;overflow:auto}
+.checkline{display:flex;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.checkline .st{width:52px;flex:none;font-weight:600}
+.st.ok{color:var(--ok)} .st.warn{color:var(--warn)} .st.error{color:var(--danger)}
+pre.body{background:#fbfcfd;border:1px solid var(--line);border-radius:6px;padding:10px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12.5px;max-height:420px;overflow:auto}
+.qa{background:#fbfcfd;border:1px solid var(--line);border-radius:6px;padding:10px;font-size:13px;color:var(--ink-2)}
+.qa b{color:var(--ink)}
+.notice{border-radius:6px;padding:8px 10px;font-size:12.5px;margin-top:8px}
+.notice.warn{background:var(--warn-soft);color:var(--warn);border:1px solid #f0ddb8}
+.notice.err{background:var(--danger-soft);color:var(--danger);border:1px solid #f2caca}
+.notice.ok{background:var(--ok-soft);color:var(--ok);border:1px solid #cde7d5}
+.empty{color:var(--ink-3);padding:14px 2px}
+#toast{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:420px}
+.toast{background:#1f2937;color:#fff;border-radius:8px;padding:10px 12px;font-size:13px;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.toast.err{background:var(--danger)}
+.toast.ok{background:var(--accent)}
+@media (max-width:860px){
+  #app{grid-template-columns:1fr}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}
+  nav{flex-direction:row;flex-wrap:wrap}
+  nav button{width:auto}
+  .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .split{grid-template-columns:1fr}
+  main{padding:14px 12px 40px}
+  table{display:block;overflow-x:auto;white-space:nowrap}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside class="side">
+    <div class="brand"><span class="logo">习</span><div><strong>元习知识库</strong><small>yotta-learn view</small></div></div>
+    <nav id="nav"></nav>
+    <div class="side-foot">
+      <div id="kbRoot" class="mono">…</div>
+      <button class="ghost" id="btnRefresh">刷新当前页</button>
+    </div>
+  </aside>
+  <main>
+    <header class="top">
+      <h1 id="viewTitle">总览</h1>
+      <div class="top-actions"><span class="badge" id="originBadge">加载中</span></div>
+    </header>
+    <section id="view"><div class="empty">加载中…</div></section>
+  </main>
+</div>
+<div id="toast"></div>
+<script>
+const TOKEN = (document.querySelector('meta[name="yotta-view-token"]')||{}).content || '';
+const CONFIRM = {
+  entryDeprecate:'entry-deprecate', indexRebuild:'index-rebuild',
+  locationSet:'location-set', locationMove:'location-move',
+  trashPurge:'trash-purge', snapshotRestore:'snapshot-restore',
+  reviewForce:'review-force'
+};
+const ICONS = {
+  overview:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
+  categories:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  entries:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  review:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+  location:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+  ops:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 21l-3-3-9.7-9.7a4 4 0 0 1-5-5L6 6l3 3"/></svg>'
+};
+const NAV = [['overview','总览'],['categories','分类'],['entries','条目'],['search','搜索'],['review','审核'],['location','位置'],['ops','运维']];
+const state = {view:'overview', overview:null, categories:[], entry:null, opsBackup:''};
+
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function $(sel,root){return (root||document).querySelector(sel);}
+function toast(msg,kind){
+  const box=document.createElement('div');box.className='toast '+(kind||'');
+  box.textContent=String(msg);$('#toast').appendChild(box);
+  setTimeout(()=>box.remove(),4200);
+}
+async function api(path,opts){
+  const res=await fetch(path,opts||{});
+  let data=null;try{data=await res.json();}catch(e){data={error:'响应不是 JSON'};}
+  if(!res.ok||data.error){throw new Error((data&&data.error)||('HTTP '+res.status));}
+  return data;
+}
+async function act(action,payload){
+  return api('/api/action',{method:'POST',
+    headers:{'Content-Type':'application/json','X-Yotta-View-Token':TOKEN},
+    body:JSON.stringify(Object.assign({action:action},payload||{}))});
+}
+function pill(status){return '<span class="pill '+esc(status)+'">'+esc(status)+'</span>';}
+function fmtTime(v){return esc(String(v||'').replace('T',' ').slice(0,19));}
+
+function renderNav(){
+  $('#nav').innerHTML=NAV.map(([id,label])=>
+    '<button data-nav="'+id+'" class="'+(state.view===id?'active':'')+'">'+ICONS[id]+'<span>'+label+'</span></button>').join('');
+  $('#nav').querySelectorAll('button').forEach(b=>b.onclick=()=>go(b.dataset.nav));
+}
+function setTitle(t){$('#viewTitle').textContent=t;}
+function setOrigin(text,ok){const b=$('#originBadge');b.textContent=text;b.className='badge '+(ok===false?'warn':'ok');}
+async function go(view){
+  state.view=view;renderNav();
+  const v=$('#view');v.innerHTML='<div class="empty">加载中…</div>';
+  try{
+    if(view==='overview')await renderOverview();
+    else if(view==='categories')await renderCategories();
+    else if(view==='entries')await renderEntries();
+    else if(view==='search')await renderSearch();
+    else if(view==='review')await renderReview();
+    else if(view==='location')await renderLocation();
+    else if(view==='ops')await renderOps();
+  }catch(e){v.innerHTML='<div class="notice err">'+esc(e.message)+'</div>';}
+}
+
+async function loadRootBadge(){
+  try{
+    const info=await api('/api/location');
+    $('#kbRoot').textContent=info.root;
+    setOrigin('位置来源：'+info.origin+(info.initialized?'':'（未初始化）'),info.initialized);
+  }catch(e){setOrigin('位置不可用：'+e.message,false);}
+}
+
+async function renderOverview(){
+  setTitle('总览');
+  const d=await api('/api/overview');
+  const s=d.stats;
+  const checks=d.doctor.checks.map(c=>'<div class="checkline"><span class="st '+esc(c.status)+'">'+esc(c.status)+'</span><span>'+esc(c.name)+'：'+esc(c.detail||'')+'</span></div>').join('');
+  const audit=(d.audit||[]).slice().reverse().map(r=>'<tr><td class="mono">'+fmtTime(r.ts||r.at||'')+'</td><td>'+esc(r.action||'')+'</td><td>'+esc(r.target||'')+'</td><td>'+esc(r.actor||'')+'</td></tr>').join('');
+  $('#view').innerHTML=
+    '<div class="grid metrics">'+
+      '<div class="metric"><b>'+esc(s.total)+'</b><span>条目总数</span></div>'+
+      '<div class="metric"><b>'+esc(s.categories)+'</b><span>分类</span></div>'+
+      '<div class="metric"><b>'+esc(s.trash)+'</b><span>回收站</span></div>'+
+      '<div class="metric"><b>'+(s.index_drift?'漂移':'健康')+'</b><span>索引状态</span></div>'+
+    '</div>'+
+    '<div class="panel"><h2>体检 <span class="hint">错误 '+esc(d.doctor.errors)+' / 警告 '+esc(d.doctor.warnings)+'</span></h2><div class="checks">'+checks+'</div></div>'+
+    '<div class="panel"><h2>最近审计</h2>'+(audit?'<table><thead><tr><th>时间</th><th>动作</th><th>对象</th><th>身份</th></tr></thead><tbody>'+audit+'</tbody></table>':'<div class="empty">暂无记录</div>')+'</div>';
+}
+
+async function renderCategories(){
+  setTitle('分类');
+  const d=await api('/api/categories');state.categories=d.categories;
+  const rows=d.categories.map(c=>'<tr><td class="mono">'+esc(c.slug)+'</td><td>'+esc(c.name)+'</td><td>'+esc(c.description)+'</td><td>'+pill(c.status||'active')+'</td><td class="muted">'+esc((c.aliases||[]).join(', '))+'</td></tr>').join('');
+  $('#view').innerHTML=
+    '<div class="panel"><h2>新建分类</h2><div class="row">'+
+      '<div class="field"><label>slug（小写连字符）</label><input id="catSlug" placeholder="agent-skills"></div>'+
+      '<div class="field"><label>中文名</label><input id="catName" placeholder="智能体与技能开发"></div>'+
+      '<div class="field grow"><label>一句话说明</label><input id="catDesc" placeholder="技能开发与编排相关知识"></div>'+
+      '<button class="primary" id="catCreate">创建</button>'+
+    '</div><div id="catNotice"></div></div>'+
+    '<div class="panel"><h2>分类列表 <span class="hint">'+esc(d.count)+' 个</span></h2>'+
+      (rows?'<table><thead><tr><th>slug</th><th>名称</th><th>说明</th><th>状态</th><th>别名</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="empty">暂无分类</div>')+'</div>';
+  $('#catCreate').onclick=async()=>{
+    try{
+      const r=await act('category.create',{slug:$('#catSlug').value.trim(),name:$('#catName').value.trim(),description:$('#catDesc').value.trim()});
+      toast('已创建分类 '+r.slug,'ok');go('categories');
+    }catch(e){$('#catNotice').innerHTML='<div class="notice err">'+esc(e.message)+'</div>';}
+  };
+}
+
+async function renderEntries(){
+  setTitle('条目');
+  const d=await api('/api/entries');
+  const cats=(state.categories.length?state.categories:(await api('/api/categories')).categories);
+  const options='<option value="">全部分类</option>'+cats.map(c=>'<option value="'+esc(c.slug)+'">'+esc(c.name)+'（'+esc(c.slug)+'）</option>').join('');
+  const rows=d.entries.map(e=>'<tr class="click" data-id="'+esc(e.id)+'"><td class="mono">'+esc(e.id)+'</td><td>'+pill(e.status)+'</td><td>'+esc(e.category)+'</td><td>'+esc(e.title)+'</td><td class="muted">'+esc((e.tags||[]).join(', '))+'</td><td class="muted">'+fmtTime(e.updated)+'</td></tr>').join('');
+  $('#view').innerHTML=
+    '<div class="panel"><h2>写入条目（默认草稿，核验后生效）</h2><div class="row">'+
+      '<div class="field"><label>分类</label><select id="addCat">'+options+'</select></div>'+
+      '<div class="field grow"><label>标题</label><input id="addTitle"></div>'+
+      '<div class="field"><label>置信度</label><select id="addConf"><option>medium</option><option>high</option><option>low</option></select></div>'+
+    '</div><div class="row" style="margin-top:8px">'+
+      '<div class="field grow"><label>正文（Markdown）</label><textarea id="addMsg"></textarea></div>'+
+    '</div><div class="row" style="margin-top:8px">'+
+      '<div class="field"><label>来源</label><input id="addSource"></div>'+
+      '<div class="field"><label>标签（逗号分隔）</label><input id="addTags"></div>'+
+      '<div class="field grow"><label>证据（核验用）</label><input id="addEvidence"></div>'+
+      '<button class="primary" id="addBtn">写入草稿</button>'+
+    '</div><div id="addNotice"></div></div>'+
+    '<div class="panel"><h2>条目列表 <span class="hint">'+esc(d.count)+' 条</span></h2><div class="row">'+
+      '<div class="field"><label>分类</label><select id="fCat">'+options+'</select></div>'+
+      '<div class="field"><label>状态</label><select id="fStatus"><option value="">全部</option><option>draft</option><option>verified</option><option>deprecated</option></select></div>'+
+      '<div class="field"><label>标签</label><input id="fTag"></div><button class="ghost" id="fApply">筛选</button>'+
+    '</div><div id="entryTable">'+(rows?'<table><thead><tr><th>ID</th><th>状态</th><th>分类</th><th>标题</th><th>标签</th><th>更新</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="empty">暂无条目</div>')+'</div></div>'+
+    '<div id="entryDetail"></div>';
+  $('#addBtn').onclick=async()=>{
+    try{
+      const r=await act('entry.add',{category:$('#addCat').value,title:$('#addTitle').value.trim(),message:$('#addMsg').value,
+        source:$('#addSource').value.trim(),tags:$('#addTags').value.trim(),evidence:$('#addEvidence').value.trim(),confidence:$('#addConf').value});
+      let extra='';
+      if((r.sensitive||[]).length)extra+='<div class="notice warn">敏感命中 '+r.sensitive.length+' 处，核验将被阻断（需 force 放行）。</div>';
+      if((r.similar||[]).length)extra+='<div class="notice warn">标题相近：'+r.similar.map(s=>esc(s.id)).join(', ')+'</div>';
+      $('#addNotice').innerHTML='<div class="notice ok">已写入草稿 '+esc(r.id)+'</div>'+extra;
+      toast('已写入草稿 '+r.id,'ok');loadRootBadge();
+    }catch(e){$('#addNotice').innerHTML='<div class="notice err">'+esc(e.message)+'</div>';}
+  };
+  $('#fApply').onclick=async()=>{
+    try{
+      const params=new URLSearchParams();
+      if($('#fCat').value)params.set('category',$('#fCat').value);
+      if($('#fStatus').value)params.set('status',$('#fStatus').value);
+      if($('#fTag').value.trim())params.set('tag',$('#fTag').value.trim());
+      const dd=await api('/api/entries?'+params.toString());
+      const rr=dd.entries.map(e=>'<tr class="click" data-id="'+esc(e.id)+'"><td class="mono">'+esc(e.id)+'</td><td>'+pill(e.status)+'</td><td>'+esc(e.category)+'</td><td>'+esc(e.title)+'</td><td class="muted">'+esc((e.tags||[]).join(', '))+'</td><td class="muted">'+fmtTime(e.updated)+'</td></tr>').join('');
+      $('#entryTable').innerHTML=rr?'<table><thead><tr><th>ID</th><th>状态</th><th>分类</th><th>标题</th><th>标签</th><th>更新</th></tr></thead><tbody>'+rr+'</tbody></table>':'<div class="empty">无匹配条目</div>';
+      bindRows();
+    }catch(e){toast(e.message,'err');}
+  };
+  function bindRows(){$('#entryTable').querySelectorAll('tr.click').forEach(r=>r.onclick=()=>openEntry(r.dataset.id));}
+  bindRows();
+}
+
+async function openEntry(id){
+  try{
+    const e=await api('/api/entry?id='+encodeURIComponent(id));
+    state.entry=e;
+    const verified=e.status==='verified'?'<div class="notice ok">已核验（'+esc(e.verified_by||'')+' @ '+fmtTime(e.verified_at)+'）</div>':'';
+    $('#entryDetail').innerHTML=
+      '<div class="panel"><h2>'+esc(e.id)+' <span class="hint">'+esc(e.title)+'</span> '+pill(e.status)+'</h2>'+verified+
+      '<pre class="body">'+esc(e.body||'')+'</pre>'+
+      '<div class="row" style="margin-top:10px">'+
+        '<div class="field grow"><label>标题</label><input id="edTitle" value="'+esc(e.title)+'"></div>'+
+        '<div class="field"><label>置信度</label><select id="edConf"><option'+(e.confidence==='high'?' selected':'')+'>high</option><option'+(e.confidence==='medium'?' selected':'')+'>medium</option><option'+(e.confidence==='low'?' selected':'')+'>low</option></select></div>'+
+        '<div class="field"><label>标签（逗号分隔）</label><input id="edTags" value="'+esc((e.tags||[]).join(', '))+'"></div>'+
+      '</div>'+
+      '<div class="row" style="margin-top:8px">'+
+        '<div class="field grow"><label>正文</label><textarea id="edMsg">'+esc(e.body||'')+'</textarea></div>'+
+      '</div><div class="row" style="margin-top:8px">'+
+        '<div class="field"><label>来源</label><input id="edSource" value="'+esc(e.source||'')+'"></div>'+
+        '<div class="field grow"><label>证据</label><input id="edEvidence" value="'+esc(e.evidence||'')+'"></div>'+
+        '<button class="primary" id="edSave">保存修改</button>'+
+        '<button class="danger" id="edDep">停用条目</button>'+
+      '</div><div id="edNotice"></div>'+
+      '<div class="row" style="margin-top:10px">'+
+        '<div class="field"><label>停用确认串</label><input id="edConfirm" placeholder="'+CONFIRM.entryDeprecate+'"></div>'+
+        '<div class="field grow"><label>停用原因</label><input id="edReason"></div>'+
+      '</div></div>';
+    $('#edSave').onclick=async()=>{
+      try{
+        await act('entry.update',{id:e.id,title:$('#edTitle').value.trim(),message:$('#edMsg').value,
+          tags:$('#edTags').value.trim(),source:$('#edSource').value.trim(),
+          evidence:$('#edEvidence').value.trim(),confidence:$('#edConf').value});
+        toast('已保存 '+e.id,'ok');openEntry(e.id);
+      }catch(err){$('#edNotice').innerHTML='<div class="notice err">'+esc(err.message)+'</div>';}
+    };
+    $('#edDep').onclick=async()=>{
+      try{
+        await act('entry.deprecate',{id:e.id,confirm:$('#edConfirm').value.trim(),reason:$('#edReason').value.trim()});
+        toast('已停用 '+e.id,'ok');openEntry(e.id);
+      }catch(err){$('#edNotice').innerHTML='<div class="notice err">'+esc(err.message)+'</div>';}
+    };
+  }catch(err){toast(err.message,'err');}
+}
+
+async function renderSearch(){
+  setTitle('搜索');
+  $('#view').innerHTML=
+    '<div class="panel"><h2>关键词查询 <span class="hint">默认只出已核验条目</span></h2><div class="row">'+
+      '<div class="field grow"><label>关键词</label><input id="qText" placeholder="例如：发布 流程"></div>'+
+      '<div class="field"><label>分类</label><input id="qCat" placeholder="可选 slug"></div>'+
+      '<div class="field"><label>返回上限</label><input id="qLimit" type="number" value="20" min="1" max="100"></div>'+
+      '<label class="field"><span><input type="checkbox" id="qDraft"> 含草稿</span><span><input type="checkbox" id="qDep"> 含停用</span></label>'+
+      '<button class="primary" id="qBtn">搜索</button>'+
+    '</div><div id="qResult" style="margin-top:10px"></div></div>';
+  $('#qBtn').onclick=async()=>{
+    try{
+      const p=new URLSearchParams({q:$('#qText').value.trim(),limit:$('#qLimit').value||'20'});
+      if($('#qCat').value.trim())p.set('category',$('#qCat').value.trim());
+      if($('#qDraft').checked)p.set('include_draft','1');
+      if($('#qDep').checked)p.set('include_deprecated','1');
+      const d=await api('/api/search?'+p.toString());
+      const rows=d.results.map(r=>'<tr class="click" data-id="'+esc(r.id)+'"><td class="mono">'+esc(r.id)+'</td><td>'+Number(r.score).toFixed(2)+'</td><td>'+pill(r.status)+'</td><td>'+esc(r.title)+'</td><td class="muted">'+esc(r.category)+'</td></tr>').join('');
+      $('#qResult').innerHTML=(d.stale?'<div class="notice warn">索引漂移，已降级线性扫描；建议到「运维」重建索引。</div>':'')+
+        (rows?'<table><thead><tr><th>ID</th><th>分数</th><th>状态</th><th>标题</th><th>分类</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="empty">无匹配结果</div>');
+      $('#qResult').querySelectorAll('tr.click').forEach(r=>r.onclick=()=>openEntry(r.dataset.id));
+    }catch(e){toast(e.message,'err');}
+  };
+}
+
+async function renderReview(){
+  setTitle('审核');
+  const d=await api('/api/entries?status=draft');
+  const rows=d.entries.map(e=>'<tr class="click" data-id="'+esc(e.id)+'"><td class="mono">'+esc(e.id)+'</td><td>'+esc(e.title)+'</td><td class="muted">'+esc(e.category)+'</td><td class="muted">'+fmtTime(e.updated)+'</td></tr>').join('');
+  $('#view').innerHTML=
+    '<div class="panel"><h2>待审核草稿 <span class="hint">'+esc(d.count)+' 条</span></h2>'+
+      (rows?'<table><thead><tr><th>ID</th><th>标题</th><th>分类</th><th>更新</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="empty">没有待审核草稿</div>')+'</div>'+
+    '<div id="reviewDetail"></div>';
+  $('#view').querySelectorAll('tr.click').forEach(r=>r.onclick=()=>openReview(r.dataset.id));
+}
+
+async function openReview(id){
+  const e=await api('/api/entry?id='+encodeURIComponent(id));
+  $('#reviewDetail').innerHTML=
+    '<div class="panel"><h2>'+esc(e.id)+' <span class="hint">'+esc(e.title)+'</span></h2>'+
+    '<div class="qa"><b>质检三问</b><br>1）验证过？有可验证的证据<br>2）自包含？不依赖会话上下文即可复用<br>3）无敏感？无密钥 / 个人信息 / 本机路径</div>'+
+    '<pre class="body" style="margin-top:10px">'+esc(e.body||'')+'</pre>'+
+    '<div class="row" style="margin-top:10px">'+
+      '<div class="field grow"><label>证据（pass 必填）</label><input id="rvEvidence" value="'+esc(e.evidence||'')+'"></div>'+
+      '<div class="field grow"><label>备注 / 拒绝原因</label><input id="rvNote"></div>'+
+    '</div><div class="row" style="margin-top:8px">'+
+      '<label class="field"><span><input type="checkbox" id="rvForce"> 敏感命中时 force 放行</span></label>'+
+      '<div class="field"><label>force 确认串</label><input id="rvConfirm" placeholder="'+CONFIRM.reviewForce+'"></div>'+
+      '<button class="primary" id="rvPass">核验通过</button>'+
+      '<button class="danger" id="rvReject">拒绝并移入回收站</button>'+
+    '</div><div id="rvNotice"></div></div>';
+  const send=async(decision)=>{
+    try{
+      const body={id:e.id,decision:decision,evidence:$('#rvEvidence').value.trim(),note:$('#rvNote').value.trim()};
+      if($('#rvForce').checked){body.force=true;body.confirm=$('#rvConfirm').value.trim();}
+      const r=await act('entry.review',body);
+      toast(decision==='pass'?('已核验 '+e.id):('已拒绝 '+e.id),'ok');
+      if((r.findings||[]).length)toast('force 放行 '+r.findings.length+' 处敏感命中（已记审计）','');
+      go('review');
+    }catch(err){$('#rvNotice').innerHTML='<div class="notice err">'+esc(err.message)+'</div>';}
+  };
+  $('#rvPass').onclick=()=>send('pass');
+  $('#rvReject').onclick=()=>send('reject');
+}
+
+async function renderLocation(){
+  setTitle('位置');
+  const info=await api('/api/location');
+  const lm=info.lastMigration||null;const un=info.unmigrated||null;
+  $('#view').innerHTML=
+    '<div class="panel"><h2>当前位置</h2>'+
+      '<table><tbody>'+
+      '<tr><th>KB 根目录</th><td class="mono">'+esc(info.root)+'</td></tr>'+
+      '<tr><th>来源</th><td>'+esc(info.origin)+'</td></tr>'+
+      '<tr><th>配置文件</th><td class="mono">'+esc(info.configFile)+(info.configExists?'':'（尚未写入）')+'</td></tr>'+
+      '<tr><th>库状态</th><td>'+(info.initialized?'已初始化（schema '+esc(info.schema||'')+'，'+esc(info.entries||0)+' 条）':'未初始化')+'</td></tr>'+
+      '</tbody></table>'+
+      (info.legacyHint?'<div class="notice warn">'+esc(info.legacyHint)+'</div>':'')+
+      (un?'<div class="notice warn">旧库未迁移：'+esc(un.from)+'（'+esc(un.entries)+' 条）<br>迁移命令：yotta-learn kb config set --dir '+esc(info.root)+' --move --from '+esc(un.from)+'</div>':'')+
+      (lm?'<div class="notice ok">最近迁移：'+esc(lm.from)+' → '+esc(lm.to)+'（'+fmtTime(lm.at)+'，'+esc(lm.entries)+' 条 / '+esc(lm.categories)+' 分类）'+(lm.movedTo?'<br>旧库已移出：<span class="mono">'+esc(lm.movedTo)+'</span>':'')+(lm.sourceLeftAt?'<br>旧库仍在原位：<span class="mono">'+esc(lm.sourceLeftAt)+'</span>':'')+'</div>':'')+
+    '</div>'+
+    '<div class="panel"><h2>切换 / 迁移位置</h2><div class="row">'+
+      '<div class="field grow"><label>目标目录</label><input id="locDir" placeholder="D:\\AI_WorkDir\\.yottalearn\\knowledge"></div>'+
+      '<div class="field"><label>方式</label><select id="locMode"><option value="move">迁移（复制校验后切，旧库移出）</option><option value="switch">仅切换（目标须已初始化）</option></select></div>'+
+      '<div class="field"><label>确认串</label><input id="locConfirm" placeholder="'+CONFIRM.locationMove+'"></div>'+
+      '<button class="primary" id="locBtn">执行</button>'+
+    '</div><div class="notice warn">迁移会先复制到暂存目录并做 doctor + 内容摘要双校验；校验失败不会切换配置、旧库不动。</div><div id="locNotice"></div></div>';
+  const modeSel=$('#locMode');
+  const syncConfirm=()=>{$('#locConfirm').placeholder=modeSel.value==='move'?CONFIRM.locationMove:CONFIRM.locationSet;};
+  modeSel.onchange=syncConfirm;syncConfirm();
+  $('#locBtn').onclick=async()=>{
+    try{
+      const r=await act('location.set',{dir:$('#locDir').value.trim(),move:modeSel.value==='move',confirm:$('#locConfirm').value.trim()});
+      let msg='位置已更新：'+r.target;
+      if(r.movedTo)msg+='；旧库已移出：'+r.movedTo;
+      (r.warnings||[]).forEach(w=>toast(w,'err'));
+      toast(msg,'ok');await loadRootBadge();go('location');
+    }catch(e){$('#locNotice').innerHTML='<div class="notice err">'+esc(e.message)+'</div>';}
+  };
+}
+
+async function renderOps(){
+  setTitle('运维');
+  const d=await api('/api/ops'+(state.opsBackup?'?backup_dir='+encodeURIComponent(state.opsBackup):''));
+  const checks=d.doctor.checks.map(c=>'<div class="checkline"><span class="st '+esc(c.status)+'">'+esc(c.status)+'</span><span>'+esc(c.name)+'：'+esc(c.detail||'')+'</span></div>').join('');
+  const trash=d.trash.map(t=>'<tr><td class="mono">'+esc(t.name||t.id||'')+'</td><td>'+esc(t.age_days)+' 天</td></tr>').join('');
+  const snaps=d.snapshots.map(s=>'<tr><td class="mono">'+esc(s.name)+'</td><td class="muted">'+fmtTime(s.created||'')+'</td><td><button class="ghost" data-restore="'+esc(s.name)+'">恢复</button></td></tr>').join('');
+  const backups=d.backups.map(b=>'<tr><td class="mono">'+esc(b.name)+'</td><td class="muted">'+fmtTime(b.created||'')+'</td></tr>').join('');
+  $('#view').innerHTML=
+    '<div class="panel"><h2>体检 <span class="hint">错误 '+esc(d.doctor.errors)+' / 警告 '+esc(d.doctor.warnings)+'</span></h2><div class="checks">'+checks+'</div>'+
+      '<div class="row" style="margin-top:10px"><div class="field"><label>重建确认串</label><input id="idxConfirm" placeholder="'+CONFIRM.indexRebuild+'"></div><button class="ghost" id="idxBtn">重建索引</button></div></div>'+
+    '<div class="split">'+
+      '<div class="panel"><h2>回收站 <span class="hint">'+esc(d.trash.length)+' 项</span></h2>'+
+        (trash?'<table><thead><tr><th>条目</th><th>存放</th></tr></thead><tbody>'+trash+'</tbody></table>':'<div class="empty">空</div>')+
+        '<div class="row" style="margin-top:10px"><div class="field"><label>清理确认串</label><input id="purgeConfirm" placeholder="'+CONFIRM.trashPurge+'"></div><label class="field"><span><input type="checkbox" id="purgeAll"> 全部（忽略保留期）</span></label><button class="ghost" id="purgeBtn">清理</button></div></div>'+
+      '<div class="panel"><h2>快照 <span class="hint">'+esc(d.snapshots.length)+' 个</span></h2>'+
+        (snaps?'<table><thead><tr><th>名称</th><th>时间</th><th></th></tr></thead><tbody>'+snaps+'</tbody></table>':'<div class="empty">暂无快照</div>')+
+        '<div class="row" style="margin-top:10px"><div class="field"><label>恢复确认串</label><input id="snapConfirm" placeholder="'+CONFIRM.snapshotRestore+'"></div></div></div>'+
+    '</div>'+
+    '<div class="panel"><h2>备份 <span class="hint">独立目录</span></h2><div class="row">'+
+      '<div class="field grow"><label>备份目录</label><input id="bkOut" value="'+esc(state.opsBackup||d.backup_dir||'')+'" placeholder="D:\\YottaLearnBackups"></div>'+
+      '<button class="ghost" id="bkLoad">读取</button><button class="primary" id="bkCreate">创建备份</button></div>'+
+      (backups?'<table style="margin-top:10px"><thead><tr><th>备份</th><th>时间</th></tr></thead><tbody>'+backups+'</tbody></table>':'<div class="empty">该目录暂无备份</div>')+'</div>';
+  $('#idxBtn').onclick=async()=>{
+    try{const r=await act('index.rebuild',{confirm:$('#idxConfirm').value.trim()});toast('索引已重建：'+r.total_entries+' 条 / '+r.terms+' 词条','ok');go('ops');}
+    catch(e){toast(e.message,'err');}
+  };
+  $('#purgeBtn').onclick=async()=>{
+    try{const r=await act('trash.purge',{confirm:$('#purgeConfirm').value.trim(),all:$('#purgeAll').checked});toast('回收站清理：删除 '+r.removed+' / 保留 '+r.kept,'ok');go('ops');}
+    catch(e){toast(e.message,'err');}
+  };
+  $('#view').querySelectorAll('button[data-restore]').forEach(b=>b.onclick=async()=>{
+    try{await act('snapshot.restore',{name:b.dataset.restore,confirm:$('#snapConfirm').value.trim()});toast('已恢复快照 '+b.dataset.restore,'ok');go('ops');}
+    catch(e){toast(e.message,'err');}
+  });
+  $('#bkLoad').onclick=()=>{state.opsBackup=$('#bkOut').value.trim();go('ops');};
+  $('#bkCreate').onclick=async()=>{
+    try{const r=await act('backup.create',{out:$('#bkOut').value.trim()});toast('已创建备份：'+r.dest,'ok');go('ops');}
+    catch(e){toast(e.message,'err');}
+  };
+}
+
+$('#btnRefresh').onclick=()=>go(state.view);
+renderNav();loadRootBadge();go('overview');
+</script>
+</body>
+</html>

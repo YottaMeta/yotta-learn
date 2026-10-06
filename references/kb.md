@@ -5,14 +5,14 @@
 ## 快速上手
 
 ```bash
-# 1) 初始化（默认 ~/.yottaskills/knowledge；已存在拒绝覆盖）
+# 1) 初始化（默认 ~/.yottalearn/knowledge；已存在拒绝覆盖）
 python3 scripts/yotta_learn.py kb init
 
 # 2) 创建分类（slug 英文小写连字符；name / description 必填）
 python3 scripts/yotta_learn.py kb category create agent-skills \
   --name "智能体与技能开发" --description "技能开发与编排相关知识与方法"
 
-# 3) 写入草稿（默认 draft；source 必填）
+# 3) 写入草稿（默认 draft；source 必填，--from-learning 时自动生成）
 python3 scripts/yotta_learn.py kb add --category agent-skills \
   --title "SQLite FTS5 中文检索的坑" \
   --message "FTS5 默认分词对中文不友好，需要 bigram 或外部分词器。" \
@@ -36,13 +36,25 @@ python3 scripts/yotta_learn.py kb query 中文检索
 
 ## 位置与配置
 
-优先级：`--dir` > 环境变量 `YOTTA_LEARN_KB` > 配置文件 `~/.yottaskills/yotta-learn.json` > 默认 `~/.yottaskills/knowledge`。
+优先级：`--dir` > 环境变量 `YOTTA_LEARN_KB` > 配置文件 `~/.yottalearn/config.json` > 默认 `~/.yottalearn/knowledge`。旧版位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容并引导一次性迁移。
 
 ```bash
-python3 scripts/yotta_learn.py kb config set --dir /path/to/kb   # 持久化位置
-python3 scripts/yotta_learn.py kb config get                     # 显示解析结果与来源
-python3 scripts/yotta_learn.py kb config clear                   # 清除配置
+python3 scripts/yotta_learn.py kb config set --dir /path/to/kb           # 持久化位置（仅切换指针）
+python3 scripts/yotta_learn.py kb config set --dir /path/to/kb --move    # 迁移（复制 → 校验 → 切配置 → 旧库移出原位）
+python3 scripts/yotta_learn.py kb config set --dir /path/to/kb --move --from /old/kb   # 指定源库补迁
+python3 scripts/yotta_learn.py kb config get [--json]                    # 来源 / 未迁移 / 最近迁移
+python3 scripts/yotta_learn.py kb config clear                           # 清除配置（不删数据）
 ```
+
+- 迁移 fail-closed：复制到暂存目录 → `doctor` + 内容摘要双校验 → 原子落位；任一步失败不切配置、旧库不动、暂存清理。
+- 不带 `--move` 只切指针：若旧库已初始化会明确提示「旧库未迁移」并给出可执行的补迁命令（不静默、不假成功）。
+- 迁移成功后旧库改名 `<原名>.kb-moved-<时间戳>`（同目录），确认新库无误后可删除（建议保留 7 天）。
+
+## AI 接口（MCP）与图形化管理台
+
+- MCP stdio：`scripts/yotta_learn_mcp.py` —— 读 `kb_query` / `kb_get` / `kb_list` / `kb_stats` / `kb_categories`；写 `kb_add` / `kb_review` / `kb_update` / `kb_deprecate` / `kb_category_create`；运维 `kb_doctor` / `kb_index_rebuild`。写工具与 CLI 同源 fail-closed（草稿 / 审核门 / 敏感阻断）。
+- 图形化：`yotta-learn view`（默认 `127.0.0.1:8791`，`--port` 可改；页面内嵌本机会话令牌；破坏性动作需确认串；全部写操作留审计；零远程资源）。
+- 升库：`kb add --from-learning <LRN-ID> [--learnings-dir <目录>]` 从 `.learnings` 条目生成草稿（正文含可移植来源引用，仍走审核门）。
 
 ## 目录结构
 

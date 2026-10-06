@@ -1,7 +1,7 @@
 {
   "name": "@yottameta/yotta-learn",
-  "version": "0.3.0",
-  "description": "Yuanxi — a cross-agent learning-loop skill with a file-based knowledge base: captures mistakes, corrections and insights as reusable .learnings/ entries, and keeps verified knowledge in categorized, indexed, keyword-searchable KB entries that any agent can read and write via CLI. Triggers on command failure / user correction / a better approach / a missing capability / an external-interface failure / stale knowledge / a need to capture or query experience. Boundaries: never records private/sensitive info unless explicitly requested; never auto-modifies system files.",
+  "version": "0.4.0",
+  "description": "Yuanxi — a cross-agent learning-loop skill with a file-based knowledge base: captures mistakes, corrections and insights as reusable .learnings/ entries, and keeps verified knowledge in categorized, indexed, keyword-searchable KB entries that any agent can read and write via CLI, MCP (stdio), or the local-only web console (view). Triggers on command failure / user correction / a better approach / a missing capability / an external-interface failure / stale knowledge / a need to capture or query experience. Boundaries: never records private/sensitive info unless explicitly requested; never auto-modifies system files.",
   "license": "MIT",
   "keywords": [
     "agent-skills",
@@ -41,6 +41,6 @@
     "yotta-learn": "bin/install.js"
   },
   "scripts": {
-    "test": "node --test \"test/*.test.js\" && python scripts/test_yotta_learn.py && python scripts/test_yotta_kb.py"
+    "test": "node --test \"test/*.test.js\" && python scripts/test_yotta_learn.py && python scripts/test_yotta_kb.py && python scripts/test_yotta_learn_mcp.py && python scripts/test_yotta_learn_view.py"
   }
 }

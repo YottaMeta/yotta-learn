@@ -68,7 +68,9 @@ AI 智能体最常见的浪费，是同一个错误在不同会话里反复犯�
 - ID：`LRN/ERR/FEAT-YYYYMMDD-XXX`（同一天自增）。
 - 字段：Logged / Priority / Status / Area / Pattern-Key；正文分 Summary 与 Details。
 - 兼容：已有用户数据保留，初始化绝不覆盖；旧格式条目可读。
-- 知识库：默认 `~/.yottaskills/knowledge`（可用 `kb config set --dir <路径>` 指定任意位置）；条目为 Markdown + 受控 frontmatter，ID `KB-YYYYMMDD-XXX`，状态 draft / verified / deprecated。
+- 知识库：默认 `~/.yottalearn/knowledge`（配置 `~/.yottalearn/config.json`；可用 `kb config set --dir <路径>` 指定任意位置，`--move` 迁移旧库）；条目为 Markdown + 受控 frontmatter，ID `KB-YYYYMMDD-XXX`，状态 draft / verified / deprecated。
+- AI 接口：MCP stdio（`scripts/yotta_learn_mcp.py`；读 / 写 / 运维 12 工具，写工具与 CLI 同源 fail-closed）；图形化管理台 `yotta-learn view`（仅 127.0.0.1，七视图：总览 / 分类 / 条目 / 搜索 / 审核 / 位置 / 运维）。
+- 升库：`kb add --from-learning <LRN-ID>` 把 .learnings 条目转成 KB 草稿（保留可移植来源引用，仍走审核门）。
 
 ## 使用示例
 

@@ -54,7 +54,7 @@ try:
 except Exception:
     pass
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 TOOL_NAME = "yotta-learn"
 
 # 类型 → (ID 前缀, 文件名, 显示名)
@@ -734,6 +734,9 @@ def _kb_parse_list(values):
 
 def _kb_init(args):
     root, source = _kb_root(args)
+    hint = yotta_kb.legacy_location_hint(source)
+    if hint:
+        print("[提示] %s" % hint)
     actor = _kb_actor(args)
     yotta_kb.init_kb(root, actor)
     print("已初始化知识库：%s（来源: %s）" % (root, source))
@@ -743,36 +746,98 @@ def _kb_init(args):
 
 def _kb_config_set(args):
     target = Path(args.path).expanduser().resolve()
-    cfg = yotta_kb.load_config()
-    cfg["kbDir"] = str(target)
-    cfg["updated_at"] = yotta_kb.now_iso()
-    yotta_kb.save_config(cfg)
+    move = bool(getattr(args, "move", False))
+    from_path = getattr(args, "from_path", None)
+    as_json = bool(getattr(args, "json", False))
+    current_root, current_source = _kb_root(args)
+    if from_path:
+        if not move:
+            raise yotta_kb.KbUsageError("--from 只能与 --move 一起使用（迁移源库）")
+        current_root = Path(from_path).expanduser().resolve()
+        current_source = "from"
+    result = yotta_kb.set_location(target, move=move, current_root=current_root)
+    result["sourceOrigin"] = current_source
+    if as_json:
+        _kb_out_json(result)
+        return 0
+    if move:
+        print("已迁移知识库：%s → %s" % (result["movedFrom"], result["target"]))
+        print("  条目 %d / 分类 %d；校验摘要 %s"
+              % (result["entries"], result["categories"], result["digest"]))
+        print("已写入配置：%s（kbDir = %s）" % (yotta_kb.config_path(), target))
+        if result.get("removedLegacyConfig"):
+            print("已清理旧版配置：%s" % result["removedLegacyConfig"])
+        if result.get("movedTo"):
+            print("旧库已移出原位：%s（确认新库无误后可删除；建议保留 7 天）"
+                  % result["movedTo"])
+        for w in result.get("warnings", []):
+            print("[警告] %s" % w)
+        return 0
     print("已写入配置：%s" % yotta_kb.config_path())
     print("  kbDir = %s" % target)
+    if result.get("removedLegacyConfig"):
+        print("已清理旧版配置：%s" % result["removedLegacyConfig"])
+    un = result.get("unmigrated")
+    if un:
+        print("[警告] 旧库未迁移：%s（%d 条条目仍在原位）"
+              % (un["from"], un["entries"]))
+        print("  迁移命令：yotta-learn kb config set --dir %s --move --from %s"
+              % (target, un["from"]))
     return 0
 
 
 def _kb_config_get(args):
-    root, source = _kb_root(args)
+    info = yotta_kb.location_info(getattr(args, "dir", None))
+    root = info["root"]
+    source = info["origin"]
+    cfg_file = Path(info["configFile"])
+    cfg = yotta_kb.load_config()
+    hint = info.get("legacyHint", "")
+    if getattr(args, "json", False):
+        _kb_out_json(info)
+        return 0
     print("KB 根目录: %s" % root)
     print("来源: %s" % {"flag": "--dir", "env": "YOTTA_LEARN_KB",
-                        "config": "配置文件", "default": "默认"}.get(source, source))
-    if yotta_kb.is_initialized(root):
-        kb_meta = yotta_kb.load_kb(root)
+                        "config": "配置文件", "default": "默认",
+                        "legacy-config": "旧版配置文件",
+                        "legacy-default": "旧版默认位置"}.get(source, source))
+    print("配置文件: %s%s" % (cfg_file, "" if cfg_file.exists() else "（尚未写入）"))
+    if info["initialized"]:
         print("库状态: 已初始化（schema %s，%d 条条目）"
-              % (kb_meta.get("schema"), yotta_kb.count_entries(root)))
+              % (info.get("schema"), info.get("entries", 0)))
     else:
         print("库状态: 未初始化（运行 yotta-learn kb init）")
+    if hint:
+        print("[提示] %s" % hint)
+    un = cfg.get("unmigrated")
+    if isinstance(un, dict):
+        print("[警告] 旧库未迁移：%s（%s 条条目仍在原位）"
+              % (un.get("from"), un.get("entries")))
+        print("  迁移命令：yotta-learn kb config set --dir %s --move --from %s"
+              % (root, un.get("from")))
+    lm = cfg.get("lastMigration")
+    if isinstance(lm, dict):
+        print("最近迁移: %s → %s（%s，%s 条 / %s 分类）"
+              % (lm.get("from"), lm.get("to"), lm.get("at"),
+                 lm.get("entries"), lm.get("categories")))
+        if lm.get("movedTo"):
+            print("  旧库已移出: %s" % lm.get("movedTo"))
+        if lm.get("sourceLeftAt"):
+            print("  旧库仍在原位: %s（建议确认后清理）" % lm.get("sourceLeftAt"))
     return 0
 
 
 def _kb_config_clear(args):
-    p = yotta_kb.config_path()
-    if p.exists():
-        p.unlink()
+    removed = yotta_kb.clear_config()
+    if getattr(args, "json", False):
+        _kb_out_json({"removed": [str(p) for p in removed]})
+        return 0
+    if not removed:
+        print("配置文件不存在（无需清除）：%s" % yotta_kb.config_path())
+        return 0
+    for p in removed:
         print("已清除配置：%s" % p)
-    else:
-        print("配置文件不存在（无需清除）：%s" % p)
+    print("（仅清除位置配置，不删除知识库数据）")
     return 0
 
 
@@ -829,12 +894,86 @@ def _kb_category_deprecate(args):
     return 0
 
 
-def _kb_add(args):
+def _learning_ref(le):
+    """学习条目的可移植引用（目录名/文件名:行，不落本机绝对路径）。"""
+    return "%s/%s:%d" % (Path(le.file_path).parent.name,
+                         Path(le.file_path).name, le.line)
+
+
+def _learning_to_kb_draft(le, ref):
+    """把 .learnings 条目转成 KB 草稿正文（保留来源与关键字段）。"""
+    lines = ["来源学习条目：%s（%s）" % (le.eid, ref),
+             "类型：%s / 优先级：%s / 状态：%s" % (le.kind, le.priority, le.status)]
+    if le.area:
+        lines.append("区域：%s" % le.area)
+    if le.pattern_key:
+        lines.append("Pattern-Key：%s" % le.pattern_key)
+    lines += ["", "## 摘要", le.summary or "（无摘要）"]
+    if le.body.strip():
+        lines += ["", "## 详情", le.body.strip()]
+    return "\n".join(lines)
+
+
+def _kb_add_from_learning(args):
     root = _kb_require(args)
     actor = _kb_actor(args)
+    directory = learnings_dir(getattr(args, "learnings_dir", None))
+    le = find_entry(parse_entries(directory), args.from_learning)
+    if le is None:
+        raise yotta_kb.KbUsageError(
+            "未找到学习条目：%s（目录 %s；先 yotta-learn log 记录）"
+            % (args.from_learning, directory))
+    title = (args.title or "").strip() or (le.summary or ("学习条目 %s" % le.eid))
+    ref = _learning_ref(le)
+    message = _learning_to_kb_draft(le, ref)
     tags = _kb_parse_list(args.tags)
-    entry = yotta_kb.add_entry(root, args.category, args.title, args.message,
-                               tags, args.source, args.evidence,
+    for auto in ("learning", le.category):
+        if auto and auto not in tags:
+            tags.append(auto)
+    source = (args.source or "").strip() or ("%s（%s）" % (ref, le.eid))
+    entry = yotta_kb.add_entry(root, args.category, title, message, tags, source,
+                               args.evidence, args.confidence, actor)
+    text = "\n".join([entry.title, " ".join(entry.tags), entry.body])
+    findings = yotta_kb.scan_sensitive(text)
+    similar = yotta_kb.similar_titles(root, entry)
+    yotta_kb.audit(root, actor, "kb.add.from_learning", entry.id, "ok",
+                   {"learning": le.eid})
+    if args.json:
+        _kb_out_json({
+            "id": entry.id, "path": str(entry.path), "status": entry.status,
+            "category": entry.category, "learning": le.eid,
+            "sensitive": findings, "similar": similar,
+        })
+        return 0
+    print("已从学习条目 %s 写入草稿 %s -> %s" % (le.eid, entry.id, entry.path))
+    if findings:
+        kinds = ", ".join(sorted(set(f["kind"] for f in findings)))
+        print("[敏感] 命中 %d 处（%s）：review 通过将被阻断，需 --force --note 放行"
+              % (len(findings), kinds))
+    if similar:
+        print("[查重] 标题相近：%s"
+              % ", ".join("%s(%.2f)" % (s["id"], s["similarity"]) for s in similar))
+    print("下一步: yotta-learn kb review %s（三问清单）" % entry.id)
+    return 0
+
+
+def _kb_add(args):
+    if getattr(args, "from_learning", None):
+        return _kb_add_from_learning(args)
+    root = _kb_require(args)
+    actor = _kb_actor(args)
+    title = (args.title or "").strip()
+    message = args.message or ""
+    source = (args.source or "").strip()
+    if not title:
+        raise yotta_kb.KbUsageError("kb add 需要 --title（或用 --from-learning 从学习条目生成）")
+    if not message.strip():
+        raise yotta_kb.KbUsageError("kb add 需要 --message（或用 --from-learning）")
+    if not source:
+        raise yotta_kb.KbUsageError("kb add 需要 --source（或用 --from-learning）")
+    tags = _kb_parse_list(args.tags)
+    entry = yotta_kb.add_entry(root, args.category, title, message,
+                               tags, source, args.evidence,
                                args.confidence, actor)
     text = "\n".join([entry.title, " ".join(entry.tags), entry.body])
     findings = yotta_kb.scan_sensitive(text)
@@ -1129,6 +1268,14 @@ def _kb_snapshot_restore(args):
     return 0
 
 
+def _kb_view(args):
+    port = int(getattr(args, "port", 8791))
+    if not (0 <= port <= 65535):
+        raise yotta_kb.KbUsageError("--port 必须在 0-65535 之间（0 = 随机空闲端口）")
+    import yotta_learn_view
+    return yotta_learn_view.serve(root_dir=getattr(args, "dir", None), port=port)
+
+
 KB_COMMANDS = {
     "init": _kb_init,
     "config_set": _kb_config_set,
@@ -1247,6 +1394,11 @@ def build_parser():
     p_kb = sub.add_parser("kb", help="知识库（分类 / 条目 / 索引 / 查询 / 审核）")
     kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)
 
+    p_view = sub.add_parser("view", help="启动本地知识库管理台（仅 127.0.0.1）")
+    p_view.add_argument("--port", type=int, default=8791,
+                        help="端口（默认 8791；0 = 随机空闲端口，自动化用）")
+    p_view.add_argument("--dir", help="知识库根目录（默认按位置优先级解析）")
+
     def kb_dir(p):
         p.add_argument("--dir", help="知识库根目录（优先级: --dir > YOTTA_LEARN_KB > 配置 > 默认）")
 
@@ -1261,8 +1413,15 @@ def build_parser():
     cfg_sub = p.add_subparsers(dest="kb_config_command", required=True)
     p2 = cfg_sub.add_parser("set", help="持久化 KB 根目录（任意位置）")
     p2.add_argument("--dir", dest="path", required=True, metavar="PATH")
-    cfg_sub.add_parser("get", help="显示解析结果与来源")
-    cfg_sub.add_parser("clear", help="清除持久化配置")
+    p2.add_argument("--move", action="store_true",
+                    help="把当前库迁移到新位置（复制 → 校验 → 切配置 → 旧库移出原位）")
+    p2.add_argument("--from", dest="from_path", metavar="PATH",
+                    help="与 --move 连用：指定要迁移的源库（默认当前解析到的库）")
+    p2.add_argument("--json", action="store_true", help="以 JSON 输出")
+    p2 = cfg_sub.add_parser("get", help="显示解析结果与来源")
+    p2.add_argument("--json", action="store_true", help="以 JSON 输出")
+    p2 = cfg_sub.add_parser("clear", help="清除持久化配置")
+    p2.add_argument("--json", action="store_true", help="以 JSON 输出")
 
     p = kb_sub.add_parser("category", help="分类注册表")
     cat_sub = p.add_subparsers(dest="kb_category_command", required=True)
@@ -1295,12 +1454,16 @@ def build_parser():
 
     p = kb_sub.add_parser("add", help="写入知识条目（默认草稿）")
     p.add_argument("--category", required=True)
-    p.add_argument("--title", required=True)
-    p.add_argument("--message", required=True)
+    p.add_argument("--title", help="标题（--from-learning 时可省略，默认取学习条目摘要）")
+    p.add_argument("--message", help="正文（--from-learning 时可省略，自动生成）")
     p.add_argument("--tags", action="append", help="标签（逗号分隔，可重复）")
-    p.add_argument("--source", required=True, help="出处（URL / 文件 / 会话）")
+    p.add_argument("--source", help="出处（URL / 文件 / 会话；--from-learning 时默认取学习条目）")
     p.add_argument("--evidence", default="")
     p.add_argument("--confidence", choices=list(yotta_kb.CONFIDENCES), default="medium")
+    p.add_argument("--from-learning", dest="from_learning", metavar="LRN-ID",
+                   help="从 .learnings 条目生成 KB 草稿（保留来源链接，走审核门）")
+    p.add_argument("--learnings-dir", dest="learnings_dir",
+                   help=".learnings 所在目录（默认当前目录）")
     p.add_argument("--json", action="store_true")
     kb_dir(p)
     kb_agent(p)
@@ -1426,6 +1589,7 @@ COMMANDS = {
     "stats": cmd_stats,
     "extract": cmd_extract,
     "kb": cmd_kb,
+    "view": _kb_view,
 }
 
 

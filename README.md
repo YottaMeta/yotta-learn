@@ -68,7 +68,9 @@ It is not tied to one platform — it is an agent-agnostic CLI toolkit: install 
 - ID: `LRN/ERR/FEAT-YYYYMMDD-XXX` (auto-increment per day).
 - Fields: Logged / Priority / Status / Area / Pattern-Key; body split into Summary and Details.
 - Compatibility: existing user data is preserved; init never overwrites; old-format entries readable.
-- Knowledge base: defaults to `~/.yottaskills/knowledge` (any location via `kb config set --dir <path>`); entries are Markdown with controlled frontmatter, IDs `KB-YYYYMMDD-XXX`, status draft / verified / deprecated.
+- Knowledge base: defaults to `~/.yottalearn/knowledge` (config `~/.yottalearn/config.json`; any location via `kb config set --dir <path>`, `--move` migrates the old library); entries are Markdown with controlled frontmatter, IDs `KB-YYYYMMDD-XXX`, status draft / verified / deprecated.
+- AI interface: MCP stdio (`scripts/yotta_learn_mcp.py`; 12 read/write/ops tools, write tools fail-closed and share the CLI kernel); local-only web console `yotta-learn view` (127.0.0.1 only, seven views).
+- Promotion: `kb add --from-learning <LRN-ID>` turns a .learnings entry into a KB draft (portable source reference, still gated by review).
 
 ## Usage
 

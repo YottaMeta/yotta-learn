@@ -1,7 +1,7 @@
 ---
 name: yotta-learn
-version: 0.3.0
-description: 元习 —— 跨智能体的学习闭环 + 知识库技能：把错误、纠正与洞见沉淀为 .learnings/ 条目，把验证过的知识存入分类索引的知识库（关键词查询）。触发：命令失败、用户纠正、发现更好的做法、请求缺失能力、外部接口故障、知识过时、需要沉淀或查询知识时；或用户说 记一笔/学习/沉淀/知识库/kb/查知识/self-improvement/learnings 等。边界：不写入私密/敏感信息（除非用户明确要求）；不自动改动系统文件。
+version: 0.4.0
+description: 元习 —— 跨智能体的学习闭环 + 知识库技能：把错误、纠正与洞见沉淀为 .learnings/ 条目，把验证过的知识存入分类索引的知识库（关键词查询），并提供 MCP stdio 接口与本地图形化管理台（view）。触发：命令失败、用户纠正、发现更好的做法、请求缺失能力、外部接口故障、知识过时、需要沉淀或查询知识时；或用户说 记一笔/学习/沉淀/知识库/kb/查知识/self-improvement/learnings 等。边界：不写入私密/敏感信息（除非用户明确要求）；不自动改动系统文件。
 license: MIT
 ---
 
@@ -75,6 +75,13 @@ python3 scripts/yotta_learn.py kb add --category agent-skills \
   --tags "sqlite,检索" --source "experiment"
 python3 scripts/yotta_learn.py kb review KB-20261005-001 --pass --evidence "本地实测通过"
 python3 scripts/yotta_learn.py kb query 中文检索
+
+# 升库：把 .learnings 条目转成 KB 草稿（保留来源引用，仍走审核门）
+python3 scripts/yotta_learn.py kb add --from-learning LRN-20260826-001 \
+  --category agent-skills
+
+# 本地图形化管理台（仅 127.0.0.1；页面内嵌会话令牌）
+python3 scripts/yotta_learn.py view --port 8791
 ```
 
 ## 数据协议（.learnings/）
@@ -87,11 +94,19 @@ python3 scripts/yotta_learn.py kb query 中文检索
 
 ## 知识库（KB v1）
 
-- 位置：默认 `~/.yottaskills/knowledge`；优先级 `--dir` > `YOTTA_LEARN_KB` > 配置（`kb config set --dir <路径>`）> 默认。
+- 位置：默认 `~/.yottalearn/knowledge`（配置 `~/.yottalearn/config.json`）；优先级 `--dir` > `YOTTA_LEARN_KB` > 配置 > 默认。旧版位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容并引导一次性迁移。
+- 迁移：`kb config set --dir <新位置> --move`（复制 → doctor + 内容摘要双校验 → 切配置 → 旧库移出原位）；不带 `--move` 只切指针并明确提示「旧库未迁移」，可用 `--move --from <旧库>` 补迁。
 - 结构：`categories/<slug>/`（category.json + entries/ + index.json）+ `index/`（全局词表 / 统计）+ `audit/` + `.trash/` + `snapshots/`。
 - 条目：Markdown + 受控 frontmatter（单行键值；字符串单引号；数组 JSON）；ID `KB-YYYYMMDD-XXX`。
 - 状态机：draft（默认）→ verified（review --pass 需证据）→ deprecated；reject 入回收站（保留 7 天）。
 - 查询：中文 bigram + 单字兜底；默认只出 verified；索引漂移自动降级线性扫描。
+- 升库：`kb add --from-learning <LRN-ID>` 把 .learnings 条目转成 KB 草稿（保留可移植来源引用，仍走审核门）。
+- AI 接口（MCP）：`scripts/yotta_learn_mcp.py`（stdio；读 kb_query/kb_get/kb_list/kb_stats/kb_categories，写 kb_add/kb_review/kb_update/kb_deprecate/kb_category_create，运维 kb_doctor/kb_index_rebuild；写工具 fail-closed）。
+  AI 自动接入：首次使用时由 AI 把该 server 写入客户端 `mcpServers` 并写永久记忆护栏；未加载自动降级 CLI。配置示例：
+  ```json
+  {"mcpServers":{"yotta-learn":{"command":"python","args":["<技能目录>/scripts/yotta_learn_mcp.py"]}}}
+  ```
+- 图形化管理台：`yotta-learn view`（默认 `127.0.0.1:8791`；本机会话令牌 + 破坏性确认串 + 审计；七视图：总览 / 分类 / 条目 / 搜索 / 审核 / 位置 / 运维）。
 - 完整命令面、协议与可靠性说明：references/kb.md。
 
 ## 元忆联动（可选）

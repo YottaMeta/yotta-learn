@@ -101,17 +101,34 @@ def _age_days(iso_text):
 
 
 # ── 配置与位置 ──────────────────────────────────────────────────────────────
+#
+# 0.4.0 起配置与默认库独立到 ~/.yottalearn/（不再与元阁 ~/.yottaskills/ 混放）。
+# 旧路径（~/.yottaskills/yotta-learn.json 与 ~/.yottaskills/knowledge）保留只读
+# 兼容 + 迁移引导；迁移 = migrate_kb（复制 → 校验 → 切配置 → 旧库移出原位）。
+
+def config_dir():
+    return Path.home() / ".yottalearn"
+
 
 def config_path():
+    return config_dir() / "config.json"
+
+
+def legacy_config_path():
     return Path.home() / ".yottaskills" / "yotta-learn.json"
 
 
-def load_config():
-    p = config_path()
-    if not p.exists():
-        return {}
+def default_kb_root():
+    return config_dir() / "knowledge"
+
+
+def legacy_default_kb_root():
+    return Path.home() / ".yottaskills" / "knowledge"
+
+
+def _read_config_file(p):
     try:
-        data = json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(Path(p).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise KbIntegrityError("配置文件损坏（%s）：%s；修复或删除后重试" % (p, exc))
     if not isinstance(data, dict):
@@ -119,22 +136,278 @@ def load_config():
     return data
 
 
+def load_config_with_source():
+    """读取位置配置：新路径优先，不存在时回退旧路径（0.3.x 兼容）。
+
+    返回 (cfg, path, legacy)。"""
+    new = config_path()
+    if new.exists():
+        return _read_config_file(new), new, False
+    old = legacy_config_path()
+    if old.exists():
+        return _read_config_file(old), old, True
+    return {}, new, False
+
+
+def load_config():
+    cfg, _path, _legacy = load_config_with_source()
+    return cfg
+
+
 def save_config(cfg):
     atomic_write_text(config_path(), json.dumps(cfg, ensure_ascii=False, indent=2) + "\n")
 
 
 def resolve_kb_root(explicit=None):
-    """位置优先级：--dir > YOTTA_LEARN_KB > 配置文件 kbDir > 默认。"""
+    """位置优先级：--dir > YOTTA_LEARN_KB > 配置文件 kbDir > 默认。
+
+    兼容回退：新配置不存在时读旧配置（legacy-config）；新默认库未初始化而旧
+    默认库已初始化时回退旧默认库（legacy-default），避免已有数据「失联」。"""
     if explicit:
         return Path(explicit).expanduser().resolve(), "flag"
     env = (os.environ.get("YOTTA_LEARN_KB") or "").strip()
     if env:
         return Path(env).expanduser().resolve(), "env"
-    cfg = load_config()
+    cfg, _cfg_path, legacy = load_config_with_source()
     kbdir = str(cfg.get("kbDir") or "").strip()
     if kbdir:
-        return Path(kbdir).expanduser().resolve(), "config"
-    return (Path.home() / ".yottaskills" / "knowledge").resolve(), "default"
+        return Path(kbdir).expanduser().resolve(), ("legacy-config" if legacy else "config")
+    new_default = default_kb_root().resolve()
+    if is_initialized(new_default):
+        return new_default, "default"
+    old_default = legacy_default_kb_root().resolve()
+    if is_initialized(old_default):
+        return old_default, "legacy-default"
+    return new_default, "default"
+
+
+def legacy_location_hint(source):
+    """旧版位置的一次性迁移引导（非旧版来源返回空串）。"""
+    if source == "legacy-config":
+        return ("检测到旧版配置位置（~/.yottaskills/yotta-learn.json）；"
+                "建议迁移：yotta-learn kb config set --dir ~/.yottalearn/knowledge --move")
+    if source == "legacy-default":
+        return ("检测到旧版默认知识库（~/.yottaskills/knowledge）；"
+                "建议迁移：yotta-learn kb config set --dir ~/.yottalearn/knowledge --move")
+    return ""
+
+
+def location_info(explicit=None):
+    """位置解析 + 配置状态（CLI config get / GUI 位置视图同一真源）。"""
+    root, source = resolve_kb_root(explicit)
+    cfg, cfg_file, _legacy = load_config_with_source()
+    info = {"root": str(root), "origin": source, "configFile": str(cfg_file),
+            "configExists": cfg_file.exists(), "initialized": is_initialized(root)}
+    if info["initialized"]:
+        kb_meta = load_kb(root)
+        info["schema"] = kb_meta.get("schema")
+        info["entries"] = count_entries(root)
+    if cfg.get("kbDir"):
+        info["kbDir"] = str(cfg["kbDir"])
+    if isinstance(cfg.get("unmigrated"), dict):
+        info["unmigrated"] = cfg["unmigrated"]
+    if isinstance(cfg.get("lastMigration"), dict):
+        info["lastMigration"] = cfg["lastMigration"]
+    hint = legacy_location_hint(source)
+    if hint:
+        info["legacyHint"] = hint
+    return info
+
+
+def clear_config():
+    """清除位置配置（新 + 旧路径）；返回被删除的文件列表。"""
+    removed = []
+    for p in (config_path(), legacy_config_path()):
+        if p.exists():
+            p.unlink()
+            removed.append(p)
+    return removed
+
+
+# ── 位置迁移（复制 → 校验 → 旧库移出原位） ─────────────────────────────────
+
+def _is_within(child, parent):
+    try:
+        Path(child).resolve().relative_to(Path(parent).resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def kb_tree_digest(root):
+    """KB 目录内容摘要（跳过 .lock / 临时文件），用于迁移前后一致性校验。"""
+    root = Path(root)
+    h = hashlib.sha256()
+    for p in sorted(root.rglob("*")):
+        rel = p.relative_to(root).as_posix()
+        if p.name == ".lock" or p.name.startswith(".ytk-") or p.name.endswith(".tmp"):
+            continue
+        if p.is_dir():
+            h.update(("D\0%s\0" % rel).encode("utf-8"))
+        elif p.is_file():
+            h.update(("F\0%s\0" % rel).encode("utf-8"))
+            with p.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            h.update(b"\0")
+    return "sha256:" + h.hexdigest()
+
+
+def _copy_kb_tree(src, dst):
+    def _ignore(_dirpath, names):
+        return [n for n in names if n == ".lock"]
+    shutil.copytree(str(src), str(dst), ignore=_ignore)
+
+
+def _verify_migration(src, dst):
+    report = doctor(dst)
+    if not report.get("ok"):
+        first = ""
+        for c in report.get("checks", []):
+            if c.get("status") == "error":
+                first = "：%s" % (c.get("detail") or c.get("name") or "")
+                break
+        raise KbIntegrityError("迁移校验失败：目标库 doctor 未通过（%d 个错误）%s"
+                               % (report.get("errors", 0), first))
+    src_digest = kb_tree_digest(src)
+    dst_digest = kb_tree_digest(dst)
+    if src_digest != dst_digest:
+        raise KbIntegrityError("迁移校验失败：源库与目标库内容摘要不一致（源 %s / 目标 %s）"
+                               % (src_digest[:19], dst_digest[:19]))
+    return {"digest": src_digest,
+            "entries": count_entries(dst),
+            "categories": len(list_categories(dst))}
+
+
+def migrate_kb(source_root, target_root, stamp=None):
+    """迁移知识库到新位置（复制到暂存 → 校验 → 原子落位）。
+
+    fail-closed：任何一步失败都清理暂存与半成品目标，源库保持不动；本函数
+    不切配置、不移旧库（由调用方在成功后再执行）。"""
+    source = Path(source_root).expanduser().resolve()
+    target = Path(target_root).expanduser().resolve()
+    if source == target:
+        raise KbUsageError("目标位置与当前库相同：%s" % target)
+    if not is_initialized(source):
+        raise KbNotFound("当前库未初始化，无法迁移：%s；"
+                         "如源库在其他位置，请加 --from <源库> 指定" % source)
+    if _is_within(target, source):
+        raise KbUsageError("目标位置不能位于源库内部：%s → %s" % (source, target))
+    if _is_within(source, target):
+        raise KbUsageError("源库不能位于目标位置内部：%s → %s" % (source, target))
+    if target.exists():
+        if not target.is_dir():
+            raise KbIntegrityError("目标已存在且不是目录，拒绝迁移：%s" % target)
+        if any(target.iterdir()):
+            raise KbIntegrityError("目标目录非空，拒绝迁移（保护现有数据）：%s；"
+                                   "请换空目录，或清理后重试" % target)
+    stamp = stamp or _timestamp()
+    parent = target.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    staging = parent / ("%s.kb-migrating-%s" % (target.name, stamp))
+    for old in parent.glob("%s.kb-migrating-*" % target.name):
+        shutil.rmtree(old, ignore_errors=True)
+    try:
+        _copy_kb_tree(source, staging)
+        verify = _verify_migration(source, staging)
+        if target.exists():
+            target.rmdir()
+        os.replace(str(staging), str(target))
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return {"from": str(source), "to": str(target), "at": now_iso(),
+            "entries": verify["entries"], "categories": verify["categories"],
+            "digest": verify["digest"], "stamp": stamp}
+
+
+def archive_moved_kb(source_root, stamp=None):
+    """把旧库移出原位（改名 <原名>.kb-moved-<stamp>），返回新路径。"""
+    source = Path(source_root).expanduser().resolve()
+    stamp = stamp or _timestamp()
+    moved = source.parent / ("%s.kb-moved-%s" % (source.name, stamp))
+    n = 2
+    while moved.exists():
+        moved = source.parent / ("%s.kb-moved-%s-%d" % (source.name, stamp, n))
+        n += 1
+    os.replace(str(source), str(moved))
+    return moved
+
+
+def _drop_legacy_config():
+    """新配置写入成功后清理旧版配置文件（仅位置指针，非知识数据）。"""
+    p = legacy_config_path()
+    if p.exists():
+        p.unlink()
+        return p
+    return None
+
+
+def set_location(target_root, move=False, current_root=None):
+    """切换 / 迁移知识库位置（CLI 与 GUI 同一真源）。
+
+    move=True：复制 → 校验 → 切配置 → 旧库移出原位（fail-closed：任一步失败
+    配置不切、旧库不动、暂存清理）。move=False：只切指针；旧库已初始化且不同
+    路径时记录 unmigrated（真实回显，不假成功）。
+
+    返回结果 dict；失败 raise KbError。"""
+    target = Path(target_root).expanduser().resolve()
+    if current_root is None:
+        current_root, _src = resolve_kb_root()
+    source = Path(current_root).expanduser().resolve()
+    result = {
+        "target": str(target), "move": bool(move), "source": str(source),
+        "config": str(config_path()), "movedFrom": None, "movedTo": None,
+        "sourceLeftAt": None, "entries": 0, "categories": 0, "digest": None,
+        "unmigrated": None, "warnings": [], "removedLegacyConfig": None,
+    }
+    if move:
+        report = migrate_kb(source, target)
+        cfg = load_config()
+        cfg["kbDir"] = str(target)
+        cfg["updated_at"] = now_iso()
+        cfg["lastMigration"] = {
+            "from": report["from"], "to": report["to"], "at": report["at"],
+            "entries": report["entries"], "categories": report["categories"],
+            "movedTo": None, "sourceLeftAt": None,
+        }
+        cfg.pop("unmigrated", None)
+        save_config(cfg)
+        removed = _drop_legacy_config()
+        if removed:
+            result["removedLegacyConfig"] = str(removed)
+        try:
+            moved = archive_moved_kb(source, report["stamp"])
+            cfg["lastMigration"]["movedTo"] = str(moved)
+        except OSError as exc:
+            cfg["lastMigration"]["sourceLeftAt"] = str(source)
+            result["warnings"].append(
+                "旧库未能移出原位：%s（%s）；请手动确认后移动或删除" % (source, exc))
+        save_config(cfg)
+        result.update({
+            "movedFrom": report["from"], "movedTo": cfg["lastMigration"]["movedTo"],
+            "sourceLeftAt": cfg["lastMigration"]["sourceLeftAt"],
+            "entries": report["entries"], "categories": report["categories"],
+            "digest": report["digest"],
+        })
+        return result
+
+    prev_initialized = is_initialized(source)
+    prev_entries = count_entries(source) if prev_initialized else 0
+    cfg = load_config()
+    cfg["kbDir"] = str(target)
+    cfg["updated_at"] = now_iso()
+    if prev_initialized and source != target:
+        unmigrated = {"from": str(source), "entries": prev_entries, "at": now_iso()}
+        cfg["unmigrated"] = unmigrated
+        result["unmigrated"] = unmigrated
+    else:
+        cfg.pop("unmigrated", None)
+    save_config(cfg)
+    removed = _drop_legacy_config()
+    if removed:
+        result["removedLegacyConfig"] = str(removed)
+    return result
 
 
 # ── 文件写入（原子）──────────────────────────────────────────────────────────

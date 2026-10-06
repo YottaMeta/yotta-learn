@@ -16,6 +16,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -149,6 +150,9 @@ class KbCliTest(unittest.TestCase):
     def test_config_set_get_clear_and_env(self):
         r = self.run_cli(["kb", "config", "set", "--dir", str(self.kb)])
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        cfg_file = self.home / ".yottalearn" / "config.json"
+        self.assertTrue(cfg_file.exists())
+        self.assertFalse((self.home / ".yottaskills" / "yotta-learn.json").exists())
         r2 = self.run_cli(["kb", "config", "get"])
         self.assertEqual(r2.returncode, 0, r2.stdout + r.stderr)
         self.assertIn(str(self.kb), r2.stdout)
@@ -160,9 +164,163 @@ class KbCliTest(unittest.TestCase):
         self.assertIn("YOTTA_LEARN_KB", r3.stdout)
         r4 = self.run_cli(["kb", "config", "clear"])
         self.assertEqual(r4.returncode, 0, r4.stdout + r4.stderr)
-        self.assertFalse((self.home / ".yottaskills" / "yotta-learn.json").exists())
+        self.assertFalse(cfg_file.exists())
 
     # ── 分类 ───────────────────────────────────────────────────────────────
+
+    def test_config_default_root_under_yottalearn(self):
+        r = self.run_cli(["kb", "init"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue((self.home / ".yottalearn" / "knowledge" / "kb.json").exists())
+        info = json.loads(self.run_cli(["kb", "config", "get", "--json"]).stdout)
+        self.assertEqual(info["origin"], "default")
+        self.assertIn(".yottalearn", info["root"])
+        self.assertTrue(info["initialized"])
+
+    def test_config_legacy_config_fallback_and_guidance(self):
+        self.init_kb()
+        legacy = self.home / ".yottaskills" / "yotta-learn.json"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(json.dumps({"kbDir": str(self.kb)}), encoding="utf-8")
+        r = self.run_cli(["kb", "config", "get", "--json"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        info = json.loads(r.stdout)
+        self.assertEqual(info["origin"], "legacy-config")
+        self.assertEqual(info["root"], str(self.kb.resolve()))
+        self.assertIn("旧版", info["legacyHint"])
+        r2 = self.run_cli(["kb", "category", "list", "--json"])
+        self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+
+    def test_config_legacy_default_fallback(self):
+        old_default = self.home / ".yottaskills" / "knowledge"
+        r = self.run_cli(["kb", "init", "--dir", str(old_default)])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        r2 = self.run_cli(["kb", "config", "get", "--json"])
+        info = json.loads(r2.stdout)
+        self.assertEqual(info["origin"], "legacy-default")
+        self.assertEqual(info["root"], str(old_default.resolve()))
+        self.assertIn("--move", info["legacyHint"])
+
+    def test_config_set_move_migrates_and_archives_old(self):
+        self.init_kb()
+        self.make_category()
+        eid = self.add_entry("迁移校验条目")
+        r0 = self.run_cli(["kb", "config", "set", "--dir", str(self.kb)])
+        self.assertEqual(r0.returncode, 0, r0.stdout + r0.stderr)
+        new = self.dir / "kb-new"
+        r = self.run_cli(["kb", "config", "set", "--dir", str(new), "--move", "--json"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["movedFrom"], str(self.kb.resolve()))
+        self.assertIsNotNone(data["movedTo"])
+        self.assertTrue(Path(data["movedTo"]).exists())
+        self.assertTrue((new / "kb.json").exists())
+        self.assertFalse(self.kb.exists())
+        self.assertTrue((Path(data["movedTo"]) / "kb.json").exists())
+        r2 = self.run_cli(["kb", "show", eid, "--json"])
+        self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+        r3 = self.run_cli(["kb", "doctor", "--json"])
+        self.assertEqual(r3.returncode, 0, r3.stdout + r3.stderr)
+        self.assertEqual(json.loads(r3.stdout)["errors"], 0)
+        info = json.loads(self.run_cli(["kb", "config", "get", "--json"]).stdout)
+        self.assertEqual(info["origin"], "config")
+        self.assertEqual(info["root"], str(new.resolve()))
+        self.assertEqual(info["lastMigration"]["from"], str(self.kb.resolve()))
+        self.assertEqual(info["lastMigration"]["movedTo"], data["movedTo"])
+        self.assertFalse((self.home / ".yottaskills" / "yotta-learn.json").exists())
+
+    def test_config_set_move_refuses_nonempty_target(self):
+        self.init_kb()
+        r0 = self.run_cli(["kb", "config", "set", "--dir", str(self.kb)])
+        self.assertEqual(r0.returncode, 0, r0.stdout + r0.stderr)
+        target = self.dir / "occupied"
+        target.mkdir()
+        (target / "x.txt").write_text("x", encoding="utf-8")
+        r = self.run_cli(["kb", "config", "set", "--dir", str(target), "--move"])
+        self.assertEqual(r.returncode, 6, r.stdout + r.stderr)
+        self.assertTrue((target / "x.txt").exists())
+        self.assertTrue((self.kb / "kb.json").exists())
+        cfg_file = self.home / ".yottalearn" / "config.json"
+        self.assertTrue(cfg_file.exists())
+        cfg = json.loads(cfg_file.read_text(encoding="utf-8"))
+        self.assertEqual(cfg["kbDir"], str(self.kb))
+        self.assertEqual(list(self.dir.glob("occupied.kb-migrating-*")), [])
+
+    def test_config_set_move_same_path_rejected(self):
+        self.init_kb()
+        r0 = self.run_cli(["kb", "config", "set", "--dir", str(self.kb)])
+        self.assertEqual(r0.returncode, 0, r0.stdout + r0.stderr)
+        r = self.run_cli(["kb", "config", "set", "--dir", str(self.kb), "--move"])
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertTrue((self.kb / "kb.json").exists())
+
+    def test_config_set_no_move_warns_then_move_from(self):
+        self.init_kb()
+        self.make_category()
+        eid = self.add_entry("先切指针后迁移")
+        r0 = self.run_cli(["kb", "config", "set", "--dir", str(self.kb)])
+        self.assertEqual(r0.returncode, 0, r0.stdout + r0.stderr)
+        new = self.dir / "kb-late"
+        r = self.run_cli(["kb", "config", "set", "--dir", str(new)])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("旧库未迁移", r.stdout)
+        self.assertIn("--move --from", r.stdout)
+        self.assertTrue((self.kb / "kb.json").exists())
+        info = json.loads(self.run_cli(["kb", "config", "get", "--json"]).stdout)
+        self.assertEqual(info["unmigrated"]["from"], str(self.kb.resolve()))
+        r2 = self.run_cli(["kb", "config", "set", "--dir", str(new),
+                           "--move", "--from", str(self.kb)])
+        self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+        self.assertTrue((new / "kb.json").exists())
+        self.assertFalse(self.kb.exists())
+        info2 = json.loads(self.run_cli(["kb", "config", "get", "--json"]).stdout)
+        self.assertNotIn("unmigrated", info2)
+        self.assertEqual(info2["lastMigration"]["from"], str(self.kb.resolve()))
+        r3 = self.run_cli(["kb", "show", eid, "--json"])
+        self.assertEqual(r3.returncode, 0, r3.stdout + r3.stderr)
+
+    def test_add_from_learning(self):
+        learn = self.dir / ".learnings"
+        learn.mkdir()
+        (learn / "LEARNINGS.md").write_text(
+            "# Learnings\n\n"
+            "## [LRN-20261007-001] correction\n\n"
+            "**Logged**: 2026-10-07\n"
+            "**Priority**: high\n"
+            "**Status**: pending\n"
+            "**Area**: tests\n\n"
+            "### Summary\n\n"
+            "发布前必须跑全量门禁。\n\n"
+            "### Details\n\n"
+            "上次跳过交付面检查，线上下载包才暴露问题。\n",
+            encoding="utf-8")
+        self.init_kb()
+        self.make_category()
+        r = self.run_cli([
+            "kb", "add", "--from-learning", "LRN-20261007-001",
+            "--category", "agent-skills", "--learnings-dir", str(learn),
+            "--dir", str(self.kb), "--json"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        data = json.loads(r.stdout)
+        self.assertEqual(data["learning"], "LRN-20261007-001")
+        self.assertEqual(data["status"], "draft")
+        eid = data["id"]
+        shown = json.loads(self.run_cli(
+            self.kb_args("kb", "show", eid, "--json")).stdout)
+        self.assertIn("来源学习条目：LRN-20261007-001", shown["body"])
+        self.assertIn("LEARNINGS.md", shown["source"])
+        self.assertIn("learning", shown["tags"])
+        self.assertIn("correction", shown["tags"])
+        r2 = self.run_cli(self.kb_args("kb", "review", eid, "--pass"))
+        self.assertEqual(r2.returncode, 4, r2.stdout + r2.stderr)
+        self.verify_entry(eid)
+        r3 = self.run_cli([
+            "kb", "add", "--from-learning", "LRN-20200101-999",
+            "--category", "agent-skills", "--learnings-dir", str(learn),
+            "--dir", str(self.kb)])
+        self.assertEqual(r3.returncode, 4, r3.stdout + r3.stderr)
+        r4 = self.run_cli(self.kb_args("kb", "add", "--category", "agent-skills"))
+        self.assertEqual(r4.returncode, 4, r4.stdout + r4.stderr)
 
     def test_category_create_validation_and_list(self):
         self.init_kb()
@@ -482,6 +640,39 @@ class KbCliTest(unittest.TestCase):
         self.assertEqual(r2.returncode, 4, r2.stdout + r2.stderr)
         r3 = self.run_cli(self.kb_args("kb", "query"))
         self.assertEqual(r3.returncode, 4, r3.stdout + r3.stderr)
+
+
+class KbMigrationUnitTest(unittest.TestCase):
+    """迁移内核的失败路径（暂存清理 / 源库不动），直接调模块函数。"""
+
+    def setUp(self):
+        self.td = tempfile.TemporaryDirectory()
+        self.dir = Path(self.td.name)
+        self.src = self.dir / "src-kb"
+        yotta_kb.init_kb(self.src, "tester")
+
+    def tearDown(self):
+        self.td.cleanup()
+
+    def test_migrate_copy_failure_cleans_staging_and_keeps_source(self):
+        target = self.dir / "dst-kb"
+        with mock.patch.object(yotta_kb, "_copy_kb_tree",
+                               side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                yotta_kb.migrate_kb(self.src, target)
+        self.assertTrue((self.src / "kb.json").exists())
+        self.assertFalse(target.exists())
+        self.assertEqual(list(self.dir.glob("dst-kb.kb-migrating-*")), [])
+
+    def test_migrate_verify_failure_cleans_staging_and_keeps_source(self):
+        target = self.dir / "dst-kb2"
+        with mock.patch.object(yotta_kb, "_verify_migration",
+                               side_effect=yotta_kb.KbIntegrityError("校验失败")):
+            with self.assertRaises(yotta_kb.KbIntegrityError):
+                yotta_kb.migrate_kb(self.src, target)
+        self.assertTrue((self.src / "kb.json").exists())
+        self.assertFalse(target.exists())
+        self.assertEqual(list(self.dir.glob("dst-kb2.kb-migrating-*")), [])
 
 
 if __name__ == "__main__":
