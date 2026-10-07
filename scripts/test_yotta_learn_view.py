@@ -3,7 +3,8 @@
 
 覆盖：安全壳（Host / Origin / Sec-Fetch-Site / timing-safe 令牌）/ 只读端点 /
 写操作全链路（category.create → entry.add → review → deprecate / index.rebuild /
-location.set）/ 确认串 / 请求体上限 / 错误映射 / 审计 / 迁移后会话内切换。
+location.set）/ 确认串 / 请求体上限 / 错误映射 / 审计 / 迁移后会话内切换 /
+legacy 回退写拦截（409）。
 
 运行：python scripts/test_yotta_learn_view.py
 说明：测试进程把 HOME/USERPROFILE 指到临时目录，不触碰真实用户配置。
@@ -67,7 +68,7 @@ def http(method, url, payload=None, headers=None, raw=None):
 class Server:
     def __init__(self, root):
         self.server, self.token, self.url = v.create_view_server(
-            root_dir=str(root), port=0)
+            root_dir=str(root) if root is not None else None, port=0)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
@@ -213,6 +214,46 @@ def test_http_flow(tmp):
         srv.close()
 
 
+def test_legacy_write_block(tmp):
+    home = Path(tmp) / "legacy-home"
+    home.mkdir()
+    old_default = home / ".yottaskills" / "knowledge"
+    saved = {k: os.environ.get(k)
+             for k in ("HOME", "USERPROFILE", "YOTTA_LEARN_KB")}
+    os.environ["HOME"] = str(home)
+    os.environ["USERPROFILE"] = str(home)
+    os.environ["YOTTA_LEARN_KB"] = str(old_default)  # 建库阶段显式指定，避免初始拦截
+    try:
+        yotta_kb.init_kb(old_default, "tester@host")
+        yotta_kb.create_category(old_default, "agent-skills", "智能体与技能开发",
+                                 "技能开发与编排相关知识", [], "tester@host")
+    finally:
+        os.environ.pop("YOTTA_LEARN_KB", None)
+    srv = Server(None)
+    base = srv.url.rstrip("/")
+    auth = {v.TOKEN_HEADER: srv.token}
+    try:
+        code, body, _h = http("GET", base + "/api/overview")
+        check("legacy 回退时只读端点 200", code == 200, "%s %s" % (code, body[:200]))
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "entry.add", "category": "agent-skills",
+            "title": "legacy 面板探针", "message": "正文", "source": "view-test"})
+        check("legacy 回退时 entry.add 409 + 迁移指引",
+              code == 409 and "旧版" in body and "--move" in body,
+              "%s %s" % (code, body[:200]))
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "index.rebuild", "confirm": v.CONFIRM["index_rebuild"]})
+        check("legacy 回退时 index.rebuild 409",
+              code == 409, "%s %s" % (code, body[:200]))
+    finally:
+        srv.close()
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def main():
     tmp = tempfile.mkdtemp(prefix="yottalearn-view-test-")
     home = Path(tmp) / "home"
@@ -222,6 +263,7 @@ def main():
     try:
         test_security_helpers()
         test_http_flow(tmp)
+        test_legacy_write_block(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\n结果：%d 通过 / %d 失败" % (PASS, FAIL))

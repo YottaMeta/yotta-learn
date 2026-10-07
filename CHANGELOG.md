@@ -2,12 +2,13 @@
 
 ## v0.4.0 (2026-10-07)
 
-- 存储独立与迁移：配置与默认库迁到 `~/.yottalearn/`（`config.json` + `knowledge/`）；旧位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容 + 一次性迁移引导；`kb config set --dir <路径> --move [--from <源库>]`（复制 → doctor + 内容摘要双校验 → 切配置 → 旧库移出原位，fail-closed）；不带 `--move` 时明确提示「旧库未迁移」；`kb config get` 显示来源 / 未迁移块 / 最近迁移块。
+- 存储独立与迁移：配置与默认库迁到 `~/.yottalearn/`（`config.json` + `knowledge/`）；旧位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容（回退生效时写操作 fail-closed + 一次性迁移引导，读操作与迁移不受影响）；`kb config set --dir <路径> --move [--from <源库>]`（复制 → doctor + 内容摘要双校验 → 切配置 → 旧库移出原位，fail-closed）；不带 `--move` 时明确提示「旧库未迁移」；`kb config get` 显示来源 / 未迁移块 / 最近迁移块。
 - MCP stdio server（`scripts/yotta_learn_mcp.py`）：12 工具（读 5 / 写 5 / 运维 2），双时代协议（2026-07-28 无状态 + 2025-11-25 握手）；写工具与 CLI 同源 fail-closed（草稿 / 审核门 / 敏感阻断 / force 需 note）。
 - 本地管理台（`yotta-learn view` + `assets/view.html`）：仅绑定 127.0.0.1；七视图（总览 / 分类 / 条目 / 搜索 / 审核 / 位置 / 运维）；会话令牌 + 破坏性确认串 + 审计；严格 CSP / 零远程资源。
 - 升库：`kb add --from-learning <LRN-ID>` 把 .learnings 条目转成 KB 草稿（保留可移植来源引用，仍走审核门）。
 - 修复：位置迁移后审计写回旧根（重建旧目录）→ 审计改写新库。
-- 测试：新增 `test_yotta_learn_mcp.py`（51 项）与 `test_yotta_learn_view.py`（36 项），扩展 `test_yotta_kb.py`（35 项）；真窗口走查工具 `tools/check_learn_view.js`。
+- 修复：旧版位置回退生效时写入静默落旧库（与「只读兼容」口径不符）→ 写操作 fail-closed（CLI / MCP / 面板同一写锁门，exit 5 + 迁移指引）；迁移与备份不受影响。
+- 测试：新增 `test_yotta_learn_mcp.py`（54 项）与 `test_yotta_learn_view.py`（39 项），扩展 `test_yotta_kb.py`（37 项）；真窗口走查工具 `tools/check_learn_view.js`。
 - 文档：SKILL / README（中英）/ FAQ / references/kb.md 全量更新。
 
 ## v0.3.0 (2026-10-05)

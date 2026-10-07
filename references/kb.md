@@ -36,7 +36,7 @@ python3 scripts/yotta_learn.py kb query 中文检索
 
 ## 位置与配置
 
-优先级：`--dir` > 环境变量 `YOTTA_LEARN_KB` > 配置文件 `~/.yottalearn/config.json` > 默认 `~/.yottalearn/knowledge`。旧版位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容并引导一次性迁移。
+优先级：`--dir` > 环境变量 `YOTTA_LEARN_KB` > 配置文件 `~/.yottalearn/config.json` > 默认 `~/.yottalearn/knowledge`。旧版位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容：回退生效时读操作可用，写操作 fail-closed（exit 5）并提示一次性迁移命令；迁移后写入恢复。
 
 ```bash
 python3 scripts/yotta_learn.py kb config set --dir /path/to/kb           # 持久化位置（仅切换指针）

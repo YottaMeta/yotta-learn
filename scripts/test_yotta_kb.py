@@ -4,7 +4,7 @@
 用法：
   python3 scripts/test_yotta_kb.py
 覆盖：frontmatter 协议（往返 / fail-closed / 注释与转义）、切词、init 防覆盖、
-位置配置（set/get/clear + env 覆盖）、分类（创建 / 查重 / 合并 / 停用）、
+位置配置（set/get/clear + env 覆盖 + legacy 写拦截）、分类（创建 / 查重 / 合并 / 停用）、
 条目（add / update / review / reject / deprecate / 去重）、查询（中文 bigram /
 过滤 / 评分 / 空结果 / 降级线性扫描）、可靠性（锁 / 回收站 / 快照 / 备份 /
 doctor / 索引漂移）与退出码。
@@ -200,6 +200,48 @@ class KbCliTest(unittest.TestCase):
         self.assertEqual(info["origin"], "legacy-default")
         self.assertEqual(info["root"], str(old_default.resolve()))
         self.assertIn("--move", info["legacyHint"])
+
+    def test_legacy_config_write_fail_closed(self):
+        self.init_kb()
+        self.make_category()
+        legacy = self.home / ".yottaskills" / "yotta-learn.json"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(json.dumps({"kbDir": str(self.kb)}), encoding="utf-8")
+        before = sorted(str(p) for p in (self.kb / "categories").rglob("*.md"))
+        r = self.run_cli(["kb", "add", "--category", "agent-skills",
+                          "--title", "legacy 写入探针", "--message", "正文",
+                          "--source", "experiment"])
+        self.assertEqual(r.returncode, 5, r.stdout + r.stderr)
+        self.assertIn("旧版位置", r.stderr)
+        self.assertIn("只读兼容", r.stderr)
+        self.assertIn("--move", r.stderr)
+        after = sorted(str(p) for p in (self.kb / "categories").rglob("*.md"))
+        self.assertEqual(after, before)
+        r2 = self.run_cli(["kb", "category", "list", "--json"])
+        self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+        r3 = self.run_cli(["kb", "index", "rebuild"])
+        self.assertEqual(r3.returncode, 5, r3.stdout + r3.stderr)
+
+    def test_legacy_default_write_fail_closed_then_migration_unblocks(self):
+        old_default = self.home / ".yottaskills" / "knowledge"
+        r = self.run_cli(["kb", "init", "--dir", str(old_default)])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        r1 = self.run_cli(["kb", "category", "create", "legacy-cat",
+                           "--name", "旧库分类", "--description", "迁移前不可写"])
+        self.assertEqual(r1.returncode, 5, r1.stdout + r1.stderr)
+        self.assertIn("旧版默认知识库", r1.stderr)
+        self.assertFalse((old_default / "categories" / "legacy-cat").exists())
+        out = self.dir / "backup-out"
+        r2 = self.run_cli(["kb", "backup", "create", "--out", str(out)])
+        self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+        self.assertTrue(any(out.iterdir()))
+        new = self.dir / "kb-new"
+        r3 = self.run_cli(["kb", "config", "set", "--dir", str(new), "--move"])
+        self.assertEqual(r3.returncode, 0, r3.stdout + r3.stderr)
+        r4 = self.run_cli(["kb", "category", "create", "legacy-cat",
+                           "--name", "旧库分类", "--description", "迁移后可写"])
+        self.assertEqual(r4.returncode, 0, r4.stdout + r4.stderr)
+        self.assertTrue((new / "categories" / "legacy-cat").exists())
 
     def test_config_set_move_migrates_and_archives_old(self):
         self.init_kb()

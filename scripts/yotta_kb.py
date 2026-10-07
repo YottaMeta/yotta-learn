@@ -104,7 +104,8 @@ def _age_days(iso_text):
 #
 # 0.4.0 起配置与默认库独立到 ~/.yottalearn/（不再与元阁 ~/.yottaskills/ 混放）。
 # 旧路径（~/.yottaskills/yotta-learn.json 与 ~/.yottaskills/knowledge）保留只读
-# 兼容 + 迁移引导；迁移 = migrate_kb（复制 → 校验 → 切配置 → 旧库移出原位）。
+# 兼容 + 迁移引导（回退生效时写操作 fail-closed）；迁移 = migrate_kb（复制 →
+# 校验 → 切配置 → 旧库移出原位）。
 
 def config_dir():
     return Path.home() / ".yottalearn"
@@ -190,6 +191,29 @@ def legacy_location_hint(source):
         return ("检测到旧版默认知识库（~/.yottaskills/knowledge）；"
                 "建议迁移：yotta-learn kb config set --dir ~/.yottalearn/knowledge --move")
     return ""
+
+
+LEGACY_SOURCES = ("legacy-config", "legacy-default")
+
+
+def legacy_source_for_root(root):
+    """给定库根是否由旧版位置回退生效；命中返回来源名，否则返回空串。
+
+    仅当未显式指定 --dir / YOTTA_LEARN_KB、解析链确实回退到旧位置且根一致时命中。"""
+    resolved, source = resolve_kb_root()
+    if source in LEGACY_SOURCES and resolved == Path(root).expanduser().resolve():
+        return source
+    return ""
+
+
+def assert_writable(root):
+    """写入门：旧版位置只读兼容（fail-closed），命中即拒绝并给出迁移指引。"""
+    source = legacy_source_for_root(root)
+    if not source:
+        return
+    raise KbGateError(
+        "当前知识库位于旧版位置（%s），0.4.0 起旧位置只读兼容，写入已阻断；请先迁移：%s"
+        % (Path(root).expanduser().resolve(), legacy_location_hint(source)))
 
 
 def location_info(explicit=None):
@@ -527,6 +551,7 @@ def load_kb(root):
 def init_kb(root, actor):
     """初始化知识库（fail-closed：已存在或目录非空时拒绝覆盖）。"""
     root = Path(root)
+    assert_writable(root)
     if kb_json_path(root).exists():
         raise KbIntegrityError("知识库已存在（kb.json），init 拒绝覆盖：%s；如需重建先手动备份" % root)
     if root.exists() and any(root.iterdir()):
@@ -552,7 +577,10 @@ def init_kb(root, actor):
 class KbLock:
     """跨进程写锁：O_EXCL 锁文件 + 过期接管；默认超时 10s（可用环境变量覆盖）。"""
 
-    def __init__(self, root, timeout=None, stale_after=LOCK_STALE_SECONDS):
+    def __init__(self, root, timeout=None, stale_after=LOCK_STALE_SECONDS,
+                 allow_legacy=False):
+        self.root = Path(root)
+        self.allow_legacy = allow_legacy
         self.path = lock_path(root)
         if timeout is None:
             try:
@@ -564,6 +592,8 @@ class KbLock:
         self.acquired = False
 
     def __enter__(self):
+        if not self.allow_legacy:
+            assert_writable(self.root)
         deadline = time.monotonic() + self.timeout
         while True:
             try:
@@ -1293,7 +1323,7 @@ def backup_create(root, out_dir, actor):
     while dest.exists():
         dest = out / ("%s-%d" % (base, n))
         n += 1
-    with KbLock(root):
+    with KbLock(root, allow_legacy=True):
         dest.mkdir(parents=True)
         for item in sorted(Path(root).iterdir()):
             if item.name in ("snapshots", ".lock"):

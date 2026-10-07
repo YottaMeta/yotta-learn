@@ -94,7 +94,7 @@ python3 scripts/yotta_learn.py view --port 8791
 
 ## 知识库（KB v1）
 
-- 位置：默认 `~/.yottalearn/knowledge`（配置 `~/.yottalearn/config.json`）；优先级 `--dir` > `YOTTA_LEARN_KB` > 配置 > 默认。旧版位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容并引导一次性迁移。
+- 位置：默认 `~/.yottalearn/knowledge`（配置 `~/.yottalearn/config.json`）；优先级 `--dir` > `YOTTA_LEARN_KB` > 配置 > 默认。旧版位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容：回退生效时读操作可用，写操作 fail-closed（exit 5）并提示一次性迁移。
 - 迁移：`kb config set --dir <新位置> --move`（复制 → doctor + 内容摘要双校验 → 切配置 → 旧库移出原位）；不带 `--move` 只切指针并明确提示「旧库未迁移」，可用 `--move --from <旧库>` 补迁。
 - 结构：`categories/<slug>/`（category.json + entries/ + index.json）+ `index/`（全局词表 / 统计）+ `audit/` + `.trash/` + `snapshots/`。
 - 条目：Markdown + 受控 frontmatter（单行键值；字符串单引号；数组 JSON）；ID `KB-YYYYMMDD-XXX`。

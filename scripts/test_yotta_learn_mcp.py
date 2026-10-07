@@ -205,6 +205,42 @@ def test_errors(tmp):
     check("非法分类 slug isError", resp["result"]["isError"] is True, str(resp))
 
 
+def test_legacy_write_gate(tmp):
+    home = Path(tmp) / "legacy-home"
+    home.mkdir()
+    old_default = home / ".yottaskills" / "knowledge"
+    saved = {k: os.environ.get(k)
+             for k in ("HOME", "USERPROFILE", "YOTTA_LEARN_KB")}
+    os.environ["HOME"] = str(home)
+    os.environ["USERPROFILE"] = str(home)
+    os.environ["YOTTA_LEARN_KB"] = str(old_default)  # 建库阶段显式指定，避免初始拦截
+    try:
+        yotta_kb.init_kb(old_default, "tester@host")
+        yotta_kb.create_category(old_default, "agent-skills", "智能体与技能开发",
+                                 "技能开发与编排相关知识", [], "tester@host")
+    finally:
+        os.environ.pop("YOTTA_LEARN_KB", None)
+    try:
+        resp = call("kb_add", {"category": "agent-skills", "title": "legacy 探针",
+                               "message": "正文", "source": "experiment",
+                               "agent": "tester@host"})
+        check("legacy 回退时 kb_add fail-closed",
+              resp["result"]["isError"] is True, str(resp))
+        err = payload(resp)
+        check("legacy 阻断含迁移指引与退出码 5",
+              "旧版" in err.get("error", "") and "--move" in err.get("error", "")
+              and err.get("code") == 5, str(err))
+        resp2 = call("kb_stats", {})
+        check("legacy 回退时只读 kb_stats 仍可用",
+              resp2["result"]["isError"] is False, str(resp2))
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def test_modern():
     resp = m.handle_message({"jsonrpc": "2.0", "id": 10, "method": "server/discover",
                              "params": dict(MODERN_META)})
@@ -277,6 +313,7 @@ def main():
         test_write_gates(tmp)
         test_ops(tmp)
         test_errors(tmp)
+        test_legacy_write_gate(tmp)
         test_modern()
         test_stdio_subprocess(tmp)
     finally:
