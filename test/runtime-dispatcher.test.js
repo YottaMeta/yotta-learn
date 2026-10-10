@@ -66,3 +66,10 @@ test('a broken YOTTA_LEARN_PYTHON override falls back to auto-detection', () => 
   assert.strictEqual(r.status, 0, r.stderr);
   assert.match(r.stdout, /category/);
 });
+
+test('an override that fails the probe is skipped (non-zero exit does not leak)', () => {
+  // node 不是 Python：探测应判失败并回退到真实解释器，而不是把退出码当脚本结果。
+  const r = run(['kb', '--help'], { env: { YOTTA_LEARN_PYTHON: process.execPath } });
+  assert.strictEqual(r.status, 0, r.stderr);
+  assert.match(r.stdout, /category/);
+});

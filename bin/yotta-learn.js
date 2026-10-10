@@ -85,18 +85,39 @@ function pythonCandidates() {
   return out;
 }
 
+/**
+ * 候选解释器探测：先跑一次 `-c` 确认候选可用。
+ * 隔离 HOME / 受限环境里 Windows `py` 启动器可能整体失效（如 exit 109），
+ * 直接运行脚本会把启动器的退出码误当脚本结果；探测后可自动回退到下一个候选。
+ */
+function probePython(cmd) {
+  const probe = spawnSync(cmd[0], cmd.slice(1).concat([
+    '-c', 'import sys; sys.exit(0 if sys.version_info[0] >= 3 else 1)',
+  ]), { encoding: 'utf8', timeout: 15000 });
+  if (probe.error) {
+    return { ok: false, reason: probe.error.code === 'ENOENT' ? '未找到' : probe.error.message };
+  }
+  if (probe.status !== 0) return { ok: false, reason: '退出码 ' + probe.status };
+  return { ok: true };
+}
+
 function runRuntime(args) {
   const candidates = pythonCandidates();
+  const failed = [];
   for (const cmd of candidates) {
+    const probe = probePython(cmd);
+    if (!probe.ok) {
+      failed.push(cmd.join(' ') + '（' + probe.reason + '）');
+      continue;
+    }
     const r = spawnSync(cmd[0], cmd.slice(1).concat([RUNTIME]).concat(args), { stdio: 'inherit' });
-    if (r.error && r.error.code === 'ENOENT') continue;
     if (r.error) {
       console.error('运行时启动失败: ' + r.error.message);
       process.exit(1);
     }
     process.exit(typeof r.status === 'number' ? r.status : 1);
   }
-  console.error('未找到可用的 Python 3（已尝试 ' + candidates.map(function (c) { return c.join(' '); }).join(' / ') + '）。');
+  console.error('未找到可用的 Python 3（已尝试 ' + failed.join(' / ') + '）。');
   console.error('请安装 Python 3.8+，或设置 YOTTA_LEARN_PYTHON 指向 python 可执行文件。');
   process.exit(3);
 }
