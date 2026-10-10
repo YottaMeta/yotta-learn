@@ -124,6 +124,14 @@ def test_http_flow(tmp):
         code, _body, _h = http("GET", base + "/api/location")
         check("location 端点 200", code == 200, str(code))
 
+        code, body, _h = http("GET", base + "/api/cli")
+        data = json.loads(body)
+        check("cli 端点 200 + 常用命令分组", code == 200
+              and len(data.get("quick", [])) >= 4, body[:200])
+        check("cli 端点完整帮助来自 argparse 单一真源",
+              "usage" in data.get("full", "") and "kb" in data.get("full", "")
+              and "category" in data.get("full", ""), body[:200])
+
         code, _body, _h = http("POST", base + "/api/action",
                                payload={"action": "entry.add"})
         check("写操作无令牌 403", code == 403, str(code))

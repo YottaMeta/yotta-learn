@@ -118,12 +118,12 @@ python3 scripts/yotta_learn.py view --port 8791
 - 状态机：draft（默认）→ verified（review --pass 需证据）→ deprecated；reject 入回收站（保留 7 天）。
 - 查询：中文 bigram + 单字兜底；默认只出 verified；索引漂移自动降级线性扫描。
 - 升库：`kb add --from-learning <LRN-ID>` 把 .learnings 条目转成 KB 草稿（保留可移植来源引用，仍走审核门）。
-- AI 接口（MCP）：`scripts/yotta_learn_mcp.py`（stdio；读 kb_query/kb_get/kb_list/kb_stats/kb_categories，写 kb_add/kb_review/kb_update/kb_deprecate/kb_category_create，运维 kb_doctor/kb_index_rebuild；写工具 fail-closed）。
+- AI 接口（MCP）：`scripts/yotta_learn_mcp.py`（stdio；读 kb_query/kb_get/kb_list/kb_stats/kb_categories，写 kb_add/kb_review/kb_update/kb_deprecate/kb_category_create/kb_category_rename/kb_category_merge/kb_category_deprecate，运维 kb_doctor/kb_index_rebuild；写工具 fail-closed，与 CLI 同源）。
   AI 自动接入：首次使用时由 AI 把该 server 写入客户端 `mcpServers` 并写永久记忆护栏；未加载自动降级 CLI。配置示例：
   ```json
   {"mcpServers":{"yotta-learn":{"command":"python","args":["<技能目录>/scripts/yotta_learn_mcp.py"]}}}
   ```
-- 图形化管理台：`yotta-learn view`（默认 `127.0.0.1:8791`；本机会话令牌 + 破坏性确认串 + 审计；七视图：总览 / 分类 / 条目 / 搜索 / 审核 / 位置 / 运维）。
+- 图形化管理台：`yotta-learn view`（默认 `127.0.0.1:8791`；本机会话令牌 + 破坏性确认串 + 审计；八视图：总览 / 分类 / 条目 / 搜索 / 审核 / 位置 / 运维 / 高级 CLI（常用命令速查 + 完整帮助，与 argparse 单一真源））。
 - 完整命令面、协议与可靠性说明：references/kb.md。
 
 ## 元忆联动（可选）

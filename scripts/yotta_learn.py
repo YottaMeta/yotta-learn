@@ -1578,6 +1578,78 @@ def build_parser():
     return ap
 
 
+def cli_subparser_choices(parser):
+    """返回 argparse parser 的子命令映射（无子命令则空 dict）。"""
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return action.choices
+    return {}
+
+
+def cli_help_text():
+    """完整命令面帮助文本（单一真源 = build_parser；最多下钻三层）。"""
+    ap = build_parser()
+    chunks = [ap.format_help().rstrip()]
+
+    def walk(parser, prefix, depth):
+        if depth > 3:
+            return
+        for name, sub in cli_subparser_choices(parser).items():
+            cmd = (prefix + " " + name).strip()
+            chunks.append("# %s\n%s" % (cmd, sub.format_help().rstrip()))
+            walk(sub, cmd, depth + 1)
+
+    walk(ap, "", 1)
+    return "\n\n".join(chunks)
+
+
+def cli_quick_commands():
+    """常用命令速查（管理台「高级 / CLI」页数据源；每条为可直接复制的真实命令）。"""
+    return [
+        {"group": "知识库 · 日常", "items": [
+            {"cmd": "yotta-learn kb init", "note": "初始化知识库"},
+            {"cmd": "yotta-learn view", "note": "打开图形化管理台（仅 127.0.0.1）"},
+            {"cmd": "yotta-learn kb query <关键词>", "note": "关键词查询（默认只出已核验）"},
+            {"cmd": "yotta-learn kb list --category <slug>", "note": "按分类列出条目（含草稿）"},
+            {"cmd": "yotta-learn kb show <ID>", "note": "查看条目全文"},
+        ]},
+        {"group": "分类治理", "items": [
+            {"cmd": "yotta-learn kb category create <slug> --name '<中文名>' --description '<一句话说明>'",
+             "note": "创建分类（任何 AI / 人皆可，带身份审计）"},
+            {"cmd": "yotta-learn kb category list", "note": "列出分类（含别名与状态）"},
+            {"cmd": "yotta-learn kb category rename <slug> --name '<新中文名>'",
+             "note": "重命名（仅显示名，slug 不变）"},
+            {"cmd": "yotta-learn kb category merge <slug> --into <目标slug>",
+             "note": "合并（迁移条目 + 源分类留别名并停用）"},
+            {"cmd": "yotta-learn kb category deprecate <slug> [--force]",
+             "note": "停用分类（非空需 --force）"},
+        ]},
+        {"group": "条目与审核", "items": [
+            {"cmd": "yotta-learn kb add --category <slug> --title '<标题>' --message '<正文>' --source '<出处>'",
+             "note": "写入草稿（默认 draft）"},
+            {"cmd": "yotta-learn kb review <ID> --pass --evidence '<证据>'",
+             "note": "核验通过（默认查询仅出 verified）"},
+            {"cmd": "yotta-learn kb deprecate <ID> --reason '<原因>'", "note": "停用条目（保留可查）"},
+        ]},
+        {"group": "运维", "items": [
+            {"cmd": "yotta-learn kb doctor", "note": "知识库体检"},
+            {"cmd": "yotta-learn kb index rebuild", "note": "全量重建索引"},
+            {"cmd": "yotta-learn kb backup create --out <备份目录>", "note": "创建独立备份"},
+            {"cmd": "yotta-learn kb config get", "note": "查看位置解析与来源"},
+        ]},
+        {"group": "学习闭环（.learnings）", "items": [
+            {"cmd": "yotta-learn log --type error --category correction --message '<摘要>'",
+             "note": "记录学习条目"},
+            {"cmd": "yotta-learn list --status pending", "note": "回看待处理条目"},
+            {"cmd": "yotta-learn resolve <LRN-ID>", "note": "标记已解决"},
+        ]},
+        {"group": "安装", "items": [
+            {"cmd": "yotta-learn install --agent <name>", "note": "装到智能体默认用户级目录"},
+            {"cmd": "yotta-learn-install --dir <路径>", "note": "装到指定目录"},
+        ]},
+    ]
+
+
 COMMANDS = {
     "init": cmd_init,
     "log": cmd_log,

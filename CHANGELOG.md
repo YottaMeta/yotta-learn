@@ -1,11 +1,15 @@
 # 更新日志
 
-## v0.5.0 (2026-10-10)
+## v0.5.0 (2026-10-11)
 
 - **npm 运行时入口（dispatcher）**：`yotta-learn` 不再只是安装器 —— 新增 `bin/yotta-learn.js`：`yotta-learn view` / `yotta-learn kb …` / `yotta-learn <学习命令>` 直接运行知识库与学习闭环（转发 Python 运行时，解释器探测 `YOTTA_LEARN_PYTHON` → `py -3` → `python` → `python3`）；`yotta-learn install …` 与旧旗标（`--agent` / `--dir` / `-g` / `--list` / `--dry-run`）保持安装行为；`--version` / `--help` 显示运行时帮助与安装指引；新增 `yotta-learn-install` 纯安装器入口（对齐元忆）。
 - **管理台分类治理**：分类视图新增「重命名 / 合并 / 停用」动作（令牌 + 确认串 + 审计，与 CLI 同一内核；合并自动快照、迁移条目并留别名），并显示分类创建者与创建时间。
 - **文档双路径**：SKILL / README（中英）/ references / FAQ 统一说明「已装 CLI `yotta-learn …`」与「技能目录直跑 `python3 scripts/yotta_learn.py …`」两种等价写法。
-- 测试：新增 dispatcher 路由 7 项（node）；管理台分类治理、分类计数等回归（python，48 项）。
+- **MCP 分类治理三件**：新增 `kb_category_rename` / `kb_category_merge` / `kb_category_deprecate`（与 CLI 同源 fail-closed：merge 自动快照 + 同名冲突阻断；deprecate 非空需 `force` 显式确认；全部写审计）；MCP 工具面 12 → 15，`tools/list` / `server/discover` 同步。
+- **管理台「高级 / CLI」页（第八视图）**：常用命令速查（分组 + 一键复制）+ 完整帮助（`build_parser()` 单一真源，三层命令面）；新增只读端点 `/api/cli`。
+- **面板视图切换修复**：nav 节点稳定化（切换只改 active 类）+ 渲染代际守卫（快速切换不再丢点击、旧视图慢响应不再覆盖新视图）。
+- **走查脚本版本动态化**：`tools/check_learn_view.js` 截图目录从 `package.json` 动态读取版本（不再手改）。
+- 测试：新增 dispatcher 路由 7 项（node）；管理台分类治理、分类计数等回归（python）；MCP 67 项 / view 50 项（含新增分类治理与 `/api/cli` 用例）。
 
 ## v0.4.0 (2026-10-07)
 

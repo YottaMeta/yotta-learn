@@ -69,7 +69,7 @@ It is not tied to one platform — it is an agent-agnostic CLI toolkit: install 
 - Fields: Logged / Priority / Status / Area / Pattern-Key; body split into Summary and Details.
 - Compatibility: existing user data is preserved; init never overwrites; old-format entries readable.
 - Knowledge base: defaults to `~/.yottalearn/knowledge` (config `~/.yottalearn/config.json`; any location via `kb config set --dir <path>`, `--move` migrates the old library); entries are Markdown with controlled frontmatter, IDs `KB-YYYYMMDD-XXX`, status draft / verified / deprecated.
-- AI interface: MCP stdio (`scripts/yotta_learn_mcp.py`; 12 read/write/ops tools, write tools fail-closed and share the CLI kernel); local-only web console `yotta-learn view` (a real runtime command; 127.0.0.1 only, seven views; equivalent to `python3 scripts/yotta_learn.py view` when run from the skill directory).
+- AI interface: MCP stdio (`scripts/yotta_learn_mcp.py`; 15 read/write/ops tools, write tools fail-closed and share the CLI kernel); local-only web console `yotta-learn view` (a real runtime command; 127.0.0.1 only, eight views incl. an Advanced/CLI page; equivalent to `python3 scripts/yotta_learn.py view` when run from the skill directory).
 - Promotion: `kb add --from-learning <LRN-ID>` turns a .learnings entry into a KB draft (portable source reference, still gated by review).
 
 ## Usage

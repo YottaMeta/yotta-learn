@@ -29,6 +29,7 @@ sys.path.insert(0, str(_HERE))
 
 import yotta_kb  # noqa: E402
 import yotta_kb_index  # noqa: E402
+import yotta_learn  # noqa: E402
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
@@ -237,6 +238,13 @@ def audit_payload(ctx, query):
     limit = max(1, min(limit, AUDIT_TAIL_LIMIT))
     return {"root": str(root), "origin": source, "limit": limit,
             "records": _read_jsonl_tail(yotta_kb.audit_path(root), limit)}
+
+
+def cli_payload(ctx):
+    """高级 / CLI：命令面单一真源（argparse 帮助 + 常用命令速查）。"""
+    return {"version": VIEW_VERSION,
+            "quick": yotta_learn.cli_quick_commands(),
+            "full": yotta_learn.cli_help_text()}
 
 
 # ── 写操作（内核同一真源 + 审计） ───────────────────────────────────────────
@@ -497,6 +505,7 @@ class ViewHandler(BaseHTTPRequestHandler):
             "/api/location": lambda: location_payload(ctx),
             "/api/ops": lambda: ops_payload(ctx, query),
             "/api/audit": lambda: audit_payload(ctx, query),
+            "/api/cli": lambda: cli_payload(ctx),
         }
         handler = routes.get(path)
         if handler is None:

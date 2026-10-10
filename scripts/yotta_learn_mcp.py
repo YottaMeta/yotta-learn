@@ -4,7 +4,8 @@
 
 stdio MCP server（JSON-RPC 2.0，换行分隔），把元习知识库（KB v1）暴露为 MCP
 工具：读 kb_query / kb_get / kb_list / kb_stats / kb_categories；写 kb_add /
-kb_review / kb_update / kb_deprecate / kb_category_create；运维 kb_doctor /
+kb_review / kb_update / kb_deprecate / kb_category_create /
+kb_category_rename / kb_category_merge / kb_category_deprecate；运维 kb_doctor /
 kb_index_rebuild。
 
 复用 yotta_kb.py / yotta_kb_index.py 内核（与 CLI 同一真源）：
@@ -246,6 +247,43 @@ def _tool_kb_category_create(params):
                 "status": cat.get("status")})
 
 
+def _tool_kb_category_rename(params):
+    root, _source = _root(params)
+    actor = _actor(params)
+    slug = str(params.get("slug") or "").strip()
+    name = str(params.get("name") or "").strip()
+    if not slug or not name:
+        return _tool_error("kb_category_rename 需要 slug / name 参数")
+    cat = yotta_kb.rename_category(root, slug, name, actor)
+    return _ok({"slug": cat["slug"], "name": cat["name"],
+                "status": cat.get("status")})
+
+
+def _tool_kb_category_merge(params):
+    root, _source = _root(params)
+    actor = _actor(params)
+    from_slug = str(params.get("from") or "").strip()
+    into_slug = str(params.get("into") or "").strip()
+    if not from_slug or not into_slug:
+        return _tool_error("kb_category_merge 需要 from / into 参数")
+    merged = yotta_kb.merge_category(root, from_slug, into_slug, actor)
+    return _ok({"from": merged["from"], "into": merged["into"],
+                "moved": merged["moved"]})
+
+
+def _tool_kb_category_deprecate(params):
+    root, _source = _root(params)
+    actor = _actor(params)
+    slug = str(params.get("slug") or "").strip()
+    if not slug:
+        return _tool_error("kb_category_deprecate 需要 slug 参数")
+    force = bool(params.get("force"))
+    cat = yotta_kb.deprecate_category(root, slug, actor,
+                                      reason=params.get("reason") or "",
+                                      force=force)
+    return _ok({"slug": cat["slug"], "status": cat.get("status")})
+
+
 # ── 运维工具 ────────────────────────────────────────────────────────────────
 
 def _tool_kb_doctor(params):
@@ -276,6 +314,9 @@ TOOL_HANDLERS = {
     "kb_update": _tool_kb_update,
     "kb_deprecate": _tool_kb_deprecate,
     "kb_category_create": _tool_kb_category_create,
+    "kb_category_rename": _tool_kb_category_rename,
+    "kb_category_merge": _tool_kb_category_merge,
+    "kb_category_deprecate": _tool_kb_category_deprecate,
     "kb_doctor": _tool_kb_doctor,
     "kb_index_rebuild": _tool_kb_index_rebuild,
 }
@@ -444,6 +485,52 @@ def mcp_tools():
             },
         },
         {
+            "name": "kb_category_rename",
+            "description": "重命名分类显示名（slug 与条目不变；写审计）。",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string", "description": "分类 slug"},
+                    "name": {"type": "string", "description": "新中文名"},
+                    "agent": _agent_prop(),
+                    "dir": _dir_prop(),
+                },
+                "required": ["slug", "name"],
+            },
+        },
+        {
+            "name": "kb_category_merge",
+            "description": ("合并分类：from 的条目迁入 into，from 变别名并停用"
+                            "（先建快照；同名冲突 fail-closed；写审计）。"),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "from": {"type": "string", "description": "源分类 slug"},
+                    "into": {"type": "string", "description": "目标分类 slug（可为别名）"},
+                    "agent": _agent_prop(),
+                    "dir": _dir_prop(),
+                },
+                "required": ["from", "into"],
+            },
+        },
+        {
+            "name": "kb_category_deprecate",
+            "description": ("停用分类：空分类直接停用；非空需 force=true 显式确认，"
+                            "或先 kb_category_merge 迁移条目（写审计）。"),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string", "description": "分类 slug"},
+                    "reason": {"type": "string", "description": "停用原因"},
+                    "force": {"type": "boolean",
+                              "description": "非空分类时显式确认停用（记审计）"},
+                    "agent": _agent_prop(),
+                    "dir": _dir_prop(),
+                },
+                "required": ["slug"],
+            },
+        },
+        {
             "name": "kb_doctor",
             "description": "知识库体检（kb.json / 分类 / 条目 / 索引 / 锁 / 回收站 / 容量；可带独立备份目录）。",
             "inputSchema": {
@@ -531,7 +618,9 @@ def handle_message(msg):
                     "instructions": (
                         "元习知识库 MCP（MCP 2026-07-28，向后兼容 2025-11-25 及更早握手）："
                         "读 kb_query/kb_get/kb_list/kb_stats/kb_categories；"
-                        "写 kb_add/kb_review/kb_update/kb_deprecate/kb_category_create；"
+                        "写 kb_add/kb_review/kb_update/kb_deprecate/"
+                        "kb_category_create/kb_category_rename/kb_category_merge/"
+                        "kb_category_deprecate；"
                         "运维 kb_doctor/kb_index_rebuild。写工具 fail-closed：默认草稿 + 审核门。"
                     ),
                 }, (3600000, "public")),

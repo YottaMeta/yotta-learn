@@ -78,6 +78,14 @@ button:disabled{opacity:.5;cursor:not-allowed}
 pre.body{background:#fbfcfd;border:1px solid var(--line);border-radius:6px;padding:10px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12.5px;max-height:420px;overflow:auto}
 .qa{background:#fbfcfd;border:1px solid var(--line);border-radius:6px;padding:10px;font-size:13px;color:var(--ink-2)}
 .qa b{color:var(--ink)}
+/* advanced cli */
+.quick-group{margin-top:12px}
+.quick-group h4{margin:0 0 6px;font-size:12.5px;color:var(--ink-3)}
+.quick-item{display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:6px;padding:7px 9px;margin-bottom:6px;background:#fbfcfd}
+.quick-item code{font-family:var(--mono);font-size:12px;word-break:break-all}
+.quick-item .note{color:var(--ink-3);font-size:12px;margin-top:2px}
+.quick-item button{flex:none}
+pre.cli-full{background:#fbfcfd;border:1px solid var(--line);border-radius:6px;padding:10px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;max-height:480px;overflow:auto;margin-top:10px}
 .notice{border-radius:6px;padding:8px 10px;font-size:12.5px;margin-top:8px}
 .notice.warn{background:var(--warn-soft);color:var(--warn);border:1px solid #f0ddb8}
 .notice.err{background:var(--danger-soft);color:var(--danger);border:1px solid #f2caca}
@@ -143,10 +151,13 @@ const ICONS = {
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
   review:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
   location:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
-  ops:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 21l-3-3-9.7-9.7a4 4 0 0 1-5-5L6 6l3 3"/></svg>'
+  ops:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 21l-3-3-9.7-9.7a4 4 0 0 1-5-5L6 6l3 3"/></svg>',
+  cli:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>'
 };
-const NAV = [['overview','总览'],['categories','分类'],['entries','条目'],['search','搜索'],['review','审核'],['location','位置'],['ops','运维']];
+const NAV = [['overview','总览'],['categories','分类'],['entries','条目'],['search','搜索'],['review','审核'],['location','位置'],['ops','运维'],['cli','高级 / CLI']];
 const state = {view:'overview', overview:null, categories:[], entry:null, opsBackup:''};
+let viewSeq=0;
+function stale(seq){return seq!==viewSeq;}
 
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function $(sel,root){return (root||document).querySelector(sel);}
@@ -182,24 +193,74 @@ function pill(status){return '<span class="pill '+esc(status)+'">'+esc(status)+'
 function fmtTime(v){return esc(String(v||'').replace('T',' ').slice(0,19));}
 
 function renderNav(){
-  $('#nav').innerHTML=NAV.map(([id,label])=>
-    '<button data-nav="'+id+'" class="'+(state.view===id?'active':'')+'">'+ICONS[id]+'<span>'+label+'</span></button>').join('');
-  $('#nav').querySelectorAll('button').forEach(b=>b.onclick=()=>go(b.dataset.nav));
+  const nav=$('#nav');
+  if(nav.children.length!==NAV.length){
+    nav.innerHTML=NAV.map(([id,label])=>
+      '<button data-nav="'+id+'" class="'+(state.view===id?'active':'')+'">'+ICONS[id]+'<span>'+label+'</span></button>').join('');
+    nav.querySelectorAll('button').forEach(b=>b.onclick=()=>go(b.dataset.nav));
+  }
+  nav.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.nav===state.view));
 }
 function setTitle(t){$('#viewTitle').textContent=t;}
 function setOrigin(text,ok){const b=$('#originBadge');b.textContent=text;b.className='badge '+(ok===false?'warn':'ok');}
 async function go(view){
+  const seq=++viewSeq;
   state.view=view;renderNav();
   const v=$('#view');v.innerHTML='<div class="empty">加载中…</div>';
   try{
-    if(view==='overview')await renderOverview();
-    else if(view==='categories')await renderCategories();
-    else if(view==='entries')await renderEntries();
-    else if(view==='search')await renderSearch();
-    else if(view==='review')await renderReview();
-    else if(view==='location')await renderLocation();
-    else if(view==='ops')await renderOps();
-  }catch(e){v.innerHTML='<div class="notice err">'+esc(e.message)+'</div>';}
+    if(view==='overview')await renderOverview(seq);
+    else if(view==='categories')await renderCategories(seq);
+    else if(view==='entries')await renderEntries(seq);
+    else if(view==='search')await renderSearch(seq);
+    else if(view==='review')await renderReview(seq);
+    else if(view==='location')await renderLocation(seq);
+    else if(view==='ops')await renderOps(seq);
+    else if(view==='cli')await renderCli(seq);
+  }catch(e){if(stale(seq))return;v.innerHTML='<div class="notice err">'+esc(e.message)+'</div>';}
+}
+
+async function copyText(text){
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);return true;
+    }
+  }catch(e){}
+  try{
+    const ta=document.createElement('textarea');ta.value=text;
+    ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();
+    const ok=document.execCommand('copy');ta.remove();return ok;
+  }catch(e){return false;}
+}
+
+async function renderCli(seq){
+  setTitle('高级 / CLI');
+  const d=await api('/api/cli');
+  if(stale(seq))return;
+  const quick=(d.quick||[]).map(g=>'<div class="quick-group"><h4>'+esc(g.group)+'</h4>'+
+    (g.items||[]).map(it=>'<div class="quick-item"><div><code>'+esc(it.cmd)+'</code>'+
+      '<div class="note">'+esc(it.note||'')+'</div></div>'+
+      '<button class="ghost" data-copy="'+esc(it.cmd)+'">复制</button></div>').join('')+
+    '</div>').join('');
+  $('#view').innerHTML='<div class="panel"><h2>常用命令 <span class="hint">点「复制」直接在终端执行；技能目录直跑等价：python3 scripts/yotta_learn.py …</span></h2>'+
+    quick+
+    '<div style="margin-top:10px"><button class="ghost" id="btnFullHelp">查看完整帮助</button> '+
+    '<button class="ghost" id="btnCopyFull" hidden>复制全部</button></div>'+
+    '<pre class="cli-full" id="cliFull" hidden></pre></div>';
+  $('#view').querySelectorAll('button[data-copy]').forEach(b=>{
+    b.onclick=async()=>{const ok=await copyText(b.dataset.copy);
+      toast(ok?'已复制：'+b.dataset.copy:'复制失败，请手动选择复制',ok?'ok':'err');};
+  });
+  $('#btnFullHelp').onclick=()=>{
+    const el=$('#cliFull');el.hidden=!el.hidden;
+    el.textContent=el.hidden?'':(d.full||'');
+    $('#btnCopyFull').hidden=el.hidden;
+    $('#btnFullHelp').textContent=el.hidden?'查看完整帮助':'收起完整帮助';
+  };
+  $('#btnCopyFull').onclick=async()=>{
+    const ok=await copyText(d.full||'');
+    toast(ok?'已复制完整帮助':'复制失败，请手动选择复制',ok?'ok':'err');
+  };
 }
 
 async function loadRootBadge(){
@@ -210,9 +271,10 @@ async function loadRootBadge(){
   }catch(e){setOrigin('位置不可用：'+e.message,false);}
 }
 
-async function renderOverview(){
+async function renderOverview(seq){
   setTitle('总览');
   const d=await api('/api/overview');
+  if(stale(seq))return;
   const s=d.stats;
   const checks=d.doctor.checks.map(c=>'<div class="checkline"><span class="st '+esc(c.status)+'">'+esc(c.status)+'</span><span>'+esc(c.name)+'：'+esc(c.detail||'')+'</span></div>').join('');
   const audit=(d.audit||[]).slice().reverse().map(r=>'<tr><td class="mono">'+fmtTime(r.ts||r.at||'')+'</td><td>'+esc(r.action||'')+'</td><td>'+esc(r.target||'')+'</td><td>'+esc(r.actor||'')+'</td></tr>').join('');
@@ -227,9 +289,10 @@ async function renderOverview(){
     '<div class="panel"><h2>最近审计</h2>'+(audit?'<table><thead><tr><th>时间</th><th>动作</th><th>对象</th><th>身份</th></tr></thead><tbody>'+audit+'</tbody></table>':'<div class="empty">暂无记录</div>')+'</div>';
 }
 
-async function renderCategories(){
+async function renderCategories(seq){
   setTitle('分类');
   const d=await api('/api/categories');state.categories=d.categories;
+  if(stale(seq))return;
   const rows=d.categories.map(c=>{
     const ops=(c.status==='deprecated')
       ? '<span class="muted">已停用</span>'
@@ -297,10 +360,12 @@ function openCatDeprecate(slug){
     },'停用',true);
 }
 
-async function renderEntries(){
+async function renderEntries(seq){
   setTitle('条目');
   const d=await api('/api/entries');
+  if(stale(seq))return;
   const cats=(state.categories.length?state.categories:(await api('/api/categories')).categories);
+  if(stale(seq))return;
   const options='<option value="">全部分类</option>'+cats.map(c=>'<option value="'+esc(c.slug)+'">'+esc(c.name)+'（'+esc(c.slug)+'）</option>').join('');
   const rows=d.entries.map(e=>'<tr class="click" data-id="'+esc(e.id)+'"><td class="mono">'+esc(e.id)+'</td><td>'+pill(e.status)+'</td><td>'+esc(e.category)+'</td><td>'+esc(e.title)+'</td><td class="muted">'+esc((e.tags||[]).join(', '))+'</td><td class="muted">'+fmtTime(e.updated)+'</td></tr>').join('');
   $('#view').innerHTML=
@@ -391,7 +456,7 @@ async function openEntry(id){
   }catch(err){toast(err.message,'err');}
 }
 
-async function renderSearch(){
+async function renderSearch(seq){
   setTitle('搜索');
   $('#view').innerHTML=
     '<div class="panel"><h2>关键词查询 <span class="hint">默认只出已核验条目</span></h2><div class="row">'+
@@ -416,9 +481,10 @@ async function renderSearch(){
   };
 }
 
-async function renderReview(){
+async function renderReview(seq){
   setTitle('审核');
   const d=await api('/api/entries?status=draft');
+  if(stale(seq))return;
   const rows=d.entries.map(e=>'<tr class="click" data-id="'+esc(e.id)+'"><td class="mono">'+esc(e.id)+'</td><td>'+esc(e.title)+'</td><td class="muted">'+esc(e.category)+'</td><td class="muted">'+fmtTime(e.updated)+'</td></tr>').join('');
   $('#view').innerHTML=
     '<div class="panel"><h2>待审核草稿 <span class="hint">'+esc(d.count)+' 条</span></h2>'+
@@ -456,9 +522,10 @@ async function openReview(id){
   $('#rvReject').onclick=()=>send('reject');
 }
 
-async function renderLocation(){
+async function renderLocation(seq){
   setTitle('位置');
   const info=await api('/api/location');
+  if(stale(seq))return;
   const lm=info.lastMigration||null;const un=info.unmigrated||null;
   $('#view').innerHTML=
     '<div class="panel"><h2>当前位置</h2>'+
@@ -492,9 +559,10 @@ async function renderLocation(){
   };
 }
 
-async function renderOps(){
+async function renderOps(seq){
   setTitle('运维');
   const d=await api('/api/ops'+(state.opsBackup?'?backup_dir='+encodeURIComponent(state.opsBackup):''));
+  if(stale(seq))return;
   const checks=d.doctor.checks.map(c=>'<div class="checkline"><span class="st '+esc(c.status)+'">'+esc(c.status)+'</span><span>'+esc(c.name)+'：'+esc(c.detail||'')+'</span></div>').join('');
   const trash=d.trash.map(t=>'<tr><td class="mono">'+esc(t.name||t.id||'')+'</td><td>'+esc(t.age_days)+' 天</td></tr>').join('');
   const snaps=d.snapshots.map(s=>'<tr><td class="mono">'+esc(s.name)+'</td><td class="muted">'+fmtTime(s.created||'')+'</td><td><button class="ghost" data-restore="'+esc(s.name)+'">恢复</button></td></tr>').join('');

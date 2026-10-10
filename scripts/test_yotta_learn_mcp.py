@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """test_yotta_learn_mcp.py — 元习知识库 MCP server（yotta-learn MCP）自测套件。
 
-覆盖：initialize / tools.list（12 工具）/ 读写工具全链路（kb_add → kb_review →
+覆盖：initialize / tools.list（15 工具）/ 读写工具全链路（kb_add → kb_review →
 kb_query / kb_get / kb_list / kb_stats / kb_categories）/ 写门禁（缺证据 / 敏感
-阻断 + force / 更新 / 停用）/ 运维（doctor / index rebuild）/ 错误路径 / modern
+阻断 + force / 更新 / 停用）/ 分类治理（rename / merge / deprecate + force 门）/
+运维（doctor / index rebuild）/ 错误路径 / modern
 （2026-07-28 server/discover）/ stdio 端到端。
 
 运行：python scripts/test_yotta_learn_mcp.py
@@ -80,8 +81,9 @@ def test_tools_list():
     names = {t["name"] for t in tools}
     expected = {"kb_query", "kb_get", "kb_list", "kb_stats", "kb_categories",
                 "kb_add", "kb_review", "kb_update", "kb_deprecate",
-                "kb_category_create", "kb_doctor", "kb_index_rebuild"}
-    check("tools/list 含 12 个工具", len(tools) == 12, str(names))
+                "kb_category_create", "kb_category_rename", "kb_category_merge",
+                "kb_category_deprecate", "kb_doctor", "kb_index_rebuild"}
+    check("tools/list 含 15 个工具", len(tools) == 15, str(names))
     check("tools/list 名称集合正确", names == expected, str(names))
     for t in tools:
         check("工具 %s 有 inputSchema.properties" % t["name"],
@@ -194,6 +196,69 @@ def test_ops(tmp):
           isinstance(data.get("total_entries"), int), str(data))
 
 
+def test_category_governance(tmp):
+    root = setup_kb(Path(tmp) / "category")
+
+    resp = call("kb_category_rename", {"dir": str(root), "slug": "agent-skills",
+                                       "name": "智能体与技能", "agent": "tester"})
+    data = payload(resp)
+    check("kb_category_rename 成功",
+          resp["result"]["isError"] is False and data["name"] == "智能体与技能", str(data))
+
+    resp = call("kb_category_create", {"dir": str(root), "slug": "tmp-cat",
+                                       "name": "临时分类", "description": "待合并",
+                                       "agent": "tester"})
+    check("kb_category_create 建源分类", resp["result"]["isError"] is False, str(resp))
+    resp = call("kb_add", {"dir": str(root), "category": "tmp-cat",
+                           "title": "待迁移条目", "message": "正文", "source": "test",
+                           "agent": "tester"})
+    eid = payload(resp)["id"]
+    resp = call("kb_category_merge", {"dir": str(root), "from": "tmp-cat",
+                                      "into": "agent-skills", "agent": "tester"})
+    data = payload(resp)
+    check("kb_category_merge 迁移条目",
+          resp["result"]["isError"] is False and data["moved"] == 1
+          and data["into"] == "agent-skills", str(data))
+    resp = call("kb_list", {"dir": str(root), "category": "agent-skills"})
+    check("合并后条目归属目标分类",
+          any(e["id"] == eid for e in payload(resp)["entries"]), str(resp)[:200])
+    resp = call("kb_categories", {"dir": str(root)})
+    cats = {c["slug"]: c for c in payload(resp)["categories"]}
+    check("合并后源分类停用且留别名",
+          cats["tmp-cat"]["status"] == "deprecated"
+          and cats["tmp-cat"].get("merged_into") == "agent-skills"
+          and "tmp-cat" in cats["agent-skills"].get("aliases", []), str(cats.get("tmp-cat")))
+
+    resp = call("kb_category_create", {"dir": str(root), "slug": "non-empty",
+                                       "name": "非空", "description": "x", "agent": "tester"})
+    resp = call("kb_add", {"dir": str(root), "category": "non-empty",
+                           "title": "占位", "message": "正文", "source": "test",
+                           "agent": "tester"})
+    resp = call("kb_category_deprecate", {"dir": str(root), "slug": "non-empty",
+                                          "agent": "tester"})
+    check("kb_category_deprecate 非空未 force 被拒",
+          resp["result"]["isError"] is True, str(resp))
+    resp = call("kb_category_deprecate", {"dir": str(root), "slug": "non-empty",
+                                          "force": True, "reason": "测试",
+                                          "agent": "tester"})
+    check("kb_category_deprecate force=true 通过",
+          resp["result"]["isError"] is False
+          and payload(resp)["status"] == "deprecated", str(resp))
+
+    resp = call("kb_category_create", {"dir": str(root), "slug": "empty-cat",
+                                       "name": "空分类", "description": "x",
+                                       "agent": "tester"})
+    resp = call("kb_category_deprecate", {"dir": str(root), "slug": "empty-cat",
+                                          "agent": "tester"})
+    check("kb_category_deprecate 空分类直接通过",
+          resp["result"]["isError"] is False, str(resp))
+
+    resp = call("kb_category_rename", {"dir": str(root), "slug": "agent-skills"})
+    check("kb_category_rename 缺 name 报错", resp["result"]["isError"] is True, str(resp))
+    resp = call("kb_category_merge", {"dir": str(root), "from": "agent-skills"})
+    check("kb_category_merge 缺 into 报错", resp["result"]["isError"] is True, str(resp))
+
+
 def test_errors(tmp):
     root = setup_kb(Path(tmp) / "errors")
     resp = call("nope", {})
@@ -252,9 +317,9 @@ def test_modern():
           and "2026-07-28" in result.get("supportedVersions", []), str(resp))
     resp = m.handle_message({"jsonrpc": "2.0", "id": 11, "method": "tools/list",
                              "params": dict(MODERN_META)})
-    check("modern tools/list 12 工具",
+    check("modern tools/list 15 工具",
           resp.get("result", {}).get("resultType") == "complete"
-          and len(resp["result"]["tools"]) == 12, str(resp)[:200])
+          and len(resp["result"]["tools"]) == 15, str(resp)[:200])
     resp = m.handle_message({"jsonrpc": "2.0", "id": 12, "method": "tools/call",
                              "params": {"_meta": MODERN_META["_meta"], "name": "nope",
                                         "arguments": {}}})
@@ -314,6 +379,7 @@ def main():
         test_read_write_flow(tmp)
         test_write_gates(tmp)
         test_ops(tmp)
+        test_category_governance(tmp)
         test_errors(tmp)
         test_legacy_write_gate(tmp)
         test_modern()
