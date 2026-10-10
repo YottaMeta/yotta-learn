@@ -139,6 +139,43 @@ def test_http_flow(tmp):
               code == 200 and json.loads(body)["slug"] == "release-ops", body[:200])
 
         code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "category.rename", "slug": "release-ops", "name": "发布与运维（改名）"})
+        check("category.rename 200",
+              code == 200 and json.loads(body)["name"] == "发布与运维（改名）", body[:200])
+
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "category.merge", "from": "release-ops", "into": "agent-skills"})
+        check("category.merge 缺确认串 400", code == 400, body[:200])
+
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "category.create", "slug": "merge-src",
+            "name": "合并源", "description": "用于合并迁移测试"})
+        check("category.create merge-src 200", code == 200, body[:200])
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "entry.add", "category": "merge-src",
+            "title": "待合并条目", "message": "合并时随分类迁移",
+            "source": "view-test", "tags": ["merge"]})
+        check("merge-src entry.add 200", code == 200, body[:200])
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "category.merge", "from": "merge-src", "into": "agent-skills",
+            "confirm": v.CONFIRM["category_merge"]})
+        check("category.merge 200（迁移 1 条）",
+              code == 200 and json.loads(body)["moved"] == 1, body[:200])
+
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "category.create", "slug": "temp-cat",
+            "name": "临时分类", "description": "用于停用测试"})
+        check("category.create temp-cat 200", code == 200, body[:200])
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "category.deprecate", "slug": "temp-cat"})
+        check("category.deprecate 缺确认串 400", code == 400, body[:200])
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
+            "action": "category.deprecate", "slug": "temp-cat",
+            "confirm": v.CONFIRM["category_deprecate"], "reason": "面板自测"})
+        check("category.deprecate 200",
+              code == 200 and json.loads(body)["status"] == "deprecated", body[:200])
+
+        code, body, _h = http("POST", base + "/api/action", headers=auth, payload={
             "action": "entry.add", "category": "agent-skills",
             "title": "面板写入条目", "message": "面板写入的正文内容",
             "source": "view-test", "tags": ["view", "kb"]})
@@ -186,6 +223,8 @@ def test_http_flow(tmp):
         records = [json.loads(line) for line in audit_lines if line.strip()]
         check("审计含 view.entry.add",
               any(r.get("action") == "view.entry.add" for r in records), str(records[-3:]))
+        check("审计含 view.category.merge",
+              any(r.get("action") == "view.category.merge" for r in records), str(records[-3:]))
 
         target = Path(tmp) / "kb-new"
         code, body, _h = http("POST", base + "/api/action", headers=auth, payload={

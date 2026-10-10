@@ -22,6 +22,8 @@ sys.path.insert(0, str(_HERE))
 import yotta_learn_mcp as m  # noqa: E402
 import yotta_kb  # noqa: E402
 
+PKG_VERSION = json.loads((_HERE.parent / "package.json").read_text(encoding="utf-8"))["version"]
+
 PASS = 0
 FAIL = 0
 FAILED = []
@@ -66,8 +68,8 @@ def test_initialize():
           resp.get("result", {}).get("protocolVersion") == "2025-11-25", str(resp))
     check("initialize serverInfo.name = yotta-learn",
           resp.get("result", {}).get("serverInfo", {}).get("name") == "yotta-learn", str(resp))
-    check("initialize version = 0.4.0",
-          resp.get("result", {}).get("serverInfo", {}).get("version") == "0.4.0", str(resp))
+    check("initialize version = package.json version",
+          resp.get("result", {}).get("serverInfo", {}).get("version") == PKG_VERSION, str(resp))
     check("initialize capabilities.tools 存在",
           "tools" in resp.get("result", {}).get("capabilities", {}), str(resp))
 

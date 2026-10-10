@@ -69,10 +69,12 @@ AI 智能体最常见的浪费，是同一个错误在不同会话里反复犯�
 - 字段：Logged / Priority / Status / Area / Pattern-Key；正文分 Summary 与 Details。
 - 兼容：已有用户数据保留，初始化绝不覆盖；旧格式条目可读。
 - 知识库：默认 `~/.yottalearn/knowledge`（配置 `~/.yottalearn/config.json`；可用 `kb config set --dir <路径>` 指定任意位置，`--move` 迁移旧库）；条目为 Markdown + 受控 frontmatter，ID `KB-YYYYMMDD-XXX`，状态 draft / verified / deprecated。
-- AI 接口：MCP stdio（`scripts/yotta_learn_mcp.py`；读 / 写 / 运维 12 工具，写工具与 CLI 同源 fail-closed）；图形化管理台 `yotta-learn view`（仅 127.0.0.1，七视图：总览 / 分类 / 条目 / 搜索 / 审核 / 位置 / 运维）。
+- AI 接口：MCP stdio（`scripts/yotta_learn_mcp.py`；读 / 写 / 运维 12 工具，写工具与 CLI 同源 fail-closed）；图形化管理台 `yotta-learn view`（运行时真命令；仅 127.0.0.1，七视图：总览 / 分类 / 条目 / 搜索 / 审核 / 位置 / 运维；技能目录直跑等价 `python3 scripts/yotta_learn.py view`）。
 - 升库：`kb add --from-learning <LRN-ID>` 把 .learnings 条目转成 KB 草稿（保留可移植来源引用，仍走审核门）。
 
 ## 使用示例
+
+> 命令入口说明：示例用技能目录直跑写法 `python3 scripts/yotta_learn.py`；已装 CLI 时把该前缀替换为 `yotta-learn`（如 `yotta-learn kb query 中文检索`），两者完全等价。
 
 ```bash
 # 初始化 .learnings/（幂等，不覆盖已有文件）
@@ -128,11 +130,12 @@ python3 scripts/yotta_learn.py kb query 中文检索
 
 ```text
 # 可选国内加速：npm config set registry https://registry.npmmirror.com
-npx -y @yottameta/yotta-learn --agent <智能体名称>      # 装到指定智能体默认用户级技能目录
-npx -y @yottameta/yotta-learn --dir <智能体的技能目录>  # 指到技能目录本身（如 ~/.codex/skills）
+npx -y @yottameta/yotta-learn install --agent <智能体名称>      # 装到指定智能体默认用户级技能目录
+npx -y @yottameta/yotta-learn install --dir <智能体的技能目录>  # 指到技能目录本身（如 ~/.codex/skills）
+# 旧用法兼容（等价）：npx -y @yottameta/yotta-learn --agent <智能体名称>
 ```
 
-- `--agent <name>` 自动装到该智能体默认用户级目录；`--list` 可查看各智能体默认目录。
+- `install --agent <name>` 装到该智能体默认用户级目录；`install --list` 可查看各智能体默认目录。
 - `--dir <路径>` 装到指定的技能目录；未收录的智能体用 `--dir` 指到它的技能目录。
 - npmmirror 未同步新包（404）：加 `--registry=https://registry.npmjs.org/`（国内需代理），或稍等镜像缓存。
 
@@ -157,7 +160,7 @@ bash install.sh --list           # 列出智能体 -> 默认目录
 > 方式一走 npm 源（npmmirror / npmjs），不依赖 GitHub；方式二 / 三走 GitHub，国内无代理可能失败。
 ## 升级 / 卸载
 
-- **升级**：重新安装最新版覆盖即可——重跑你用的安装命令（如 `npx -y @yottameta/yotta-learn --agent <name>` 或 `bash install.sh --agent <name>`）。技能目录内旧文件会被替换；不影响项目中其他文件。
+- **升级**：重新安装最新版覆盖即可——重跑你用的安装命令（如 `npx -y @yottameta/yotta-learn install --agent <name>` 或 `bash install.sh --agent <name>`）。技能目录内旧文件会被替换；不影响项目中其他文件。
 - **卸载**：删除目标智能体 skills 目录下的 `yotta-learn` 文件夹（各智能体目录见上表）即可。卸载后本技能不再生效。
 
 ## 常见问题

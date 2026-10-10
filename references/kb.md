@@ -2,6 +2,8 @@
 
 知识库把「验证过、可复用」的知识按分类沉淀下来，任何智能体都可以经 CLI 读写、按关键词查询。学习条目（`.learnings/`）负责采集与闭环，知识库负责沉淀与检索；两者互补。
 
+> 命令前缀：本文示例统一用技能目录直跑写法 `python3 scripts/yotta_learn.py <命令>`；已装 CLI 时把该前缀替换为 `yotta-learn`（如 `yotta-learn kb query 中文检索`），两者完全等价。
+
 ## 快速上手
 
 ```bash
@@ -53,7 +55,7 @@ python3 scripts/yotta_learn.py kb config clear                           # 清�
 ## AI 接口（MCP）与图形化管理台
 
 - MCP stdio：`scripts/yotta_learn_mcp.py` —— 读 `kb_query` / `kb_get` / `kb_list` / `kb_stats` / `kb_categories`；写 `kb_add` / `kb_review` / `kb_update` / `kb_deprecate` / `kb_category_create`；运维 `kb_doctor` / `kb_index_rebuild`。写工具与 CLI 同源 fail-closed（草稿 / 审核门 / 敏感阻断）。
-- 图形化：`yotta-learn view`（默认 `127.0.0.1:8791`，`--port` 可改；页面内嵌本机会话令牌；破坏性动作需确认串；全部写操作留审计；零远程资源）。
+- 图形化：`yotta-learn view`（运行时真命令；技能目录直跑等价 `python3 scripts/yotta_learn.py view`；默认 `127.0.0.1:8791`，`--port` 可改；页面内嵌本机会话令牌；破坏性动作需确认串；全部写操作留审计；零远程资源）。
 - 升库：`kb add --from-learning <LRN-ID> [--learnings-dir <目录>]` 从 `.learnings` 条目生成草稿（正文含可移植来源引用，仍走审核门）。
 
 ## 目录结构

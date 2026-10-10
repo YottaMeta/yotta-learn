@@ -1,5 +1,12 @@
 # 更新日志
 
+## v0.5.0 (2026-10-10)
+
+- **npm 运行时入口（dispatcher）**：`yotta-learn` 不再只是安装器 —— 新增 `bin/yotta-learn.js`：`yotta-learn view` / `yotta-learn kb …` / `yotta-learn <学习命令>` 直接运行知识库与学习闭环（转发 Python 运行时，解释器探测 `YOTTA_LEARN_PYTHON` → `py -3` → `python` → `python3`）；`yotta-learn install …` 与旧旗标（`--agent` / `--dir` / `-g` / `--list` / `--dry-run`）保持安装行为；`--version` / `--help` 显示运行时帮助与安装指引；新增 `yotta-learn-install` 纯安装器入口（对齐元忆）。
+- **管理台分类治理**：分类视图新增「重命名 / 合并 / 停用」动作（令牌 + 确认串 + 审计，与 CLI 同一内核；合并自动快照、迁移条目并留别名），并显示分类创建者与创建时间。
+- **文档双路径**：SKILL / README（中英）/ references / FAQ 统一说明「已装 CLI `yotta-learn …`」与「技能目录直跑 `python3 scripts/yotta_learn.py …`」两种等价写法。
+- 测试：新增 dispatcher 路由 7 项（node）；管理台分类治理、分类计数等回归（python，48 项）。
+
 ## v0.4.0 (2026-10-07)
 
 - 存储独立与迁移：配置与默认库迁到 `~/.yottalearn/`（`config.json` + `knowledge/`）；旧位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容（回退生效时写操作 fail-closed + 一次性迁移引导，读操作与迁移不受影响）；`kb config set --dir <路径> --move [--from <源库>]`（复制 → doctor + 内容摘要双校验 → 切配置 → 旧库移出原位，fail-closed）；不带 `--move` 时明确提示「旧库未迁移」；`kb config get` 显示来源 / 未迁移块 / 最近迁移块。

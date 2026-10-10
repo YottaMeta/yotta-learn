@@ -1,6 +1,6 @@
 ---
 name: yotta-learn
-version: 0.4.0
+version: 0.5.0
 description: 元习 —— 跨智能体的学习闭环 + 知识库技能：把错误、纠正与洞见沉淀为 .learnings/ 条目，把验证过的知识存入分类索引的知识库（关键词查询），并提供 MCP stdio 接口与本地图形化管理台（view）。触发：命令失败、用户纠正、发现更好的做法、请求缺失能力、外部接口故障、知识过时、需要沉淀或查询知识时；或用户说 记一笔/学习/沉淀/知识库/kb/查知识/self-improvement/learnings 等。边界：不写入私密/敏感信息（除非用户明确要求）；不自动改动系统文件。
 license: MIT
 ---
@@ -31,6 +31,23 @@ license: MIT
 
 `--category` 是固定枚举：`correction` / `insight` / `knowledge_gap` / `best_practice` / `error` / `other`。
 不确定时用 `other`；非法值会退出码 4 并列出全部可用值。
+
+## 命令入口
+
+两种等价用法，按可用性择一：
+
+- **已装 CLI**：`yotta-learn <命令>` —— 如 `yotta-learn view`（图形管理台）、`yotta-learn kb query 关键词`。npm 安装包自带该入口。
+- **技能目录直跑**：`python3 scripts/yotta_learn.py <命令>` —— 与 CLI 写法完全等价（CLI 内部转发到同一脚本）。
+
+以下示例统一用技能目录直跑写法；把 `python3 scripts/yotta_learn.py` 前缀替换为 `yotta-learn` 即为已装 CLI 写法。
+
+安装 / 更新技能本体（把技能装进智能体目录，不是装 CLI）：
+
+```bash
+npx -y @yottameta/yotta-learn install --agent <名称>   # 推荐：装到指定智能体用户级技能目录
+npx -y @yottameta/yotta-learn --agent <名称>           # 旧用法兼容（等价）
+# 全局安装后专属安装器入口同样可用：yotta-learn-install --agent <名称>
+```
 
 ## 快速使用
 

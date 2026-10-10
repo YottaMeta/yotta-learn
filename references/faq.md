@@ -49,7 +49,7 @@
 
 ## 10. 安装不上/没自动加载怎么办？
 
-用 `npx -y @yottameta/yotta-learn --agent <名称>` 或 `--dir <技能目录>`；npm 镜像传播延迟时临时加 `--registry=https://registry.npmjs.org/`。装到当前项目后，新会话读取技能目录才会生效。
+用 `npx -y @yottameta/yotta-learn install --agent <名称>` 或 `install --dir <技能目录>`（旧写法 `--agent` / `--dir` 仍兼容）；npm 镜像传播延迟时临时加 `--registry=https://registry.npmjs.org/`。装到当前项目后，新会话读取技能目录才会生效。
 
 ## 11. 元习和元忆怎么分工？
 

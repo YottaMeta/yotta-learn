@@ -69,10 +69,12 @@ It is not tied to one platform — it is an agent-agnostic CLI toolkit: install 
 - Fields: Logged / Priority / Status / Area / Pattern-Key; body split into Summary and Details.
 - Compatibility: existing user data is preserved; init never overwrites; old-format entries readable.
 - Knowledge base: defaults to `~/.yottalearn/knowledge` (config `~/.yottalearn/config.json`; any location via `kb config set --dir <path>`, `--move` migrates the old library); entries are Markdown with controlled frontmatter, IDs `KB-YYYYMMDD-XXX`, status draft / verified / deprecated.
-- AI interface: MCP stdio (`scripts/yotta_learn_mcp.py`; 12 read/write/ops tools, write tools fail-closed and share the CLI kernel); local-only web console `yotta-learn view` (127.0.0.1 only, seven views).
+- AI interface: MCP stdio (`scripts/yotta_learn_mcp.py`; 12 read/write/ops tools, write tools fail-closed and share the CLI kernel); local-only web console `yotta-learn view` (a real runtime command; 127.0.0.1 only, seven views; equivalent to `python3 scripts/yotta_learn.py view` when run from the skill directory).
 - Promotion: `kb add --from-learning <LRN-ID>` turns a .learnings entry into a KB draft (portable source reference, still gated by review).
 
 ## Usage
+
+> Command entries: examples below use the skill-directory form `python3 scripts/yotta_learn.py`; with the CLI installed, replace that prefix with `yotta-learn` (e.g. `yotta-learn kb query 中文检索`) — both are equivalent.
 
 ```bash
 # Initialize .learnings/ (idempotent, never overwrites existing files)
@@ -127,11 +129,12 @@ Pick any of the four methods below; the order is the recommended priority. Skill
 
 ```text
 # Optional China mirror: npm config set registry https://registry.npmmirror.com
-npx -y @yottameta/yotta-learn --agent <agent-name>      # install to the agent's default user-level skills dir
-npx -y @yottameta/yotta-learn --dir <your-skills-dir>   # point to the skills dir itself (e.g. ~/.codex/skills)
+npx -y @yottameta/yotta-learn install --agent <agent-name>      # install to the agent's default user-level skills dir
+npx -y @yottameta/yotta-learn install --dir <your-skills-dir>   # point to the skills dir itself (e.g. ~/.codex/skills)
+# Legacy form (equivalent): npx -y @yottameta/yotta-learn --agent <agent-name>
 ```
 
-- `--agent <name>` installs to that agent's default user-level directory; `--list` shows each agent's default directory.
+- `install --agent <name>` installs to that agent's default user-level directory; `install --list` shows each agent's default directory.
 - `--dir <path>` installs to the given directory; for agents not in the preset list, point `--dir` at their skills directory.
 - If the mirror has not synced the new package (404): add `--registry=https://registry.npmjs.org/` (a proxy may be needed in China), or wait for the mirror cache.
 
@@ -156,7 +159,7 @@ bash install.sh --list           # list agents -> default directories
 > Method 1 uses the npm registry (npmmirror / npmjs) and does not depend on GitHub; Methods 2/3 use GitHub and may fail without a proxy in China.
 ## Upgrade / uninstall
 
-- **Upgrade**: reinstall the latest version to overwrite — rerun the install command you used (e.g. `npx -y @yottameta/yotta-learn --agent <name>` or `bash install.sh --agent <name>`). Old files in the skill directory are replaced; other project files are untouched.
+- **Upgrade**: reinstall the latest version to overwrite — rerun the install command you used (e.g. `npx -y @yottameta/yotta-learn install --agent <name>` or `bash install.sh --agent <name>`). Old files in the skill directory are replaced; other project files are untouched.
 - **Uninstall**: delete the `yotta-learn` folder in the target agent's skills directory (see the table above).
 
 ## FAQ

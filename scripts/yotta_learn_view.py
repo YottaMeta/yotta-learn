@@ -35,7 +35,7 @@ DEFAULT_PORT = 8791
 TOKEN_HEADER = "x-yotta-view-token"
 BODY_LIMIT = 64 * 1024
 TOKEN_PLACEHOLDER = "__YOTTA_VIEW_TOKEN__"
-VIEW_VERSION = "0.4.0"
+VIEW_VERSION = "0.5.0"
 AUDIT_TAIL_LIMIT = 200
 
 CONFIRM = {
@@ -46,6 +46,8 @@ CONFIRM = {
     "trash_purge": "trash-purge",
     "snapshot_restore": "snapshot-restore",
     "review_force": "review-force",
+    "category_merge": "category-merge",
+    "category_deprecate": "category-deprecate",
 }
 
 CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
@@ -264,6 +266,33 @@ def execute_action(ctx, body):
         target = cat["slug"]
         detail = {"name": cat["name"]}
         result = {"slug": cat["slug"], "name": cat["name"]}
+
+    elif action == "category.rename":
+        slug = str(body.get("slug") or "").strip()
+        new_name = str(body.get("name") or "").strip()
+        cat = yotta_kb.rename_category(root, slug, new_name, actor)
+        target = cat["slug"]
+        detail = {"name": cat["name"]}
+        result = {"slug": cat["slug"], "name": cat["name"]}
+
+    elif action == "category.merge":
+        _need_confirm(body, "category_merge")
+        from_slug = str(body.get("from") or "").strip()
+        into_slug = str(body.get("into") or "").strip()
+        merged = yotta_kb.merge_category(root, from_slug, into_slug, actor)
+        target = merged["from"]
+        detail = {"into": merged["into"], "moved": merged["moved"]}
+        result = {"from": merged["from"], "into": merged["into"], "moved": merged["moved"]}
+
+    elif action == "category.deprecate":
+        _need_confirm(body, "category_deprecate")
+        slug = str(body.get("slug") or "").strip()
+        force = bool(body.get("force"))
+        cat = yotta_kb.deprecate_category(root, slug, actor,
+                                          body.get("reason") or "", force=force)
+        target = cat["slug"]
+        detail = {"reason": body.get("reason") or "", "force": force}
+        result = {"slug": cat["slug"], "status": cat["status"]}
 
     elif action == "entry.add":
         tags = body.get("tags") or []
