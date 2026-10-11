@@ -54,7 +54,7 @@ try:
 except Exception:
     pass
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 TOOL_NAME = "yotta-learn"
 
 # 类型 → (ID 前缀, 文件名, 显示名)
@@ -1576,6 +1576,365 @@ def build_parser():
     kb_agent(p2)
 
     return ap
+
+
+def _learn_opt(flag, arg, what, when, caution=""):
+    return {"flag": flag, "arg": arg, "what": what, "when": when, "caution": caution}
+
+
+def _learn_dir_opt():
+    return _learn_opt("--dir", "<目录>", ".learnings 所在目录（默认当前目录）",
+                      "默认当前目录不合适时")
+
+
+def _kb_dir_opt():
+    return _learn_opt("--dir", "<目录>", "指定知识库根目录",
+                      "不想用默认 / 持久化配置的位置时",
+                      "优先级：--dir > YOTTA_LEARN_KB > 配置 > 默认")
+
+
+def _kb_agent_opt():
+    return _learn_opt("--agent", "<id>", "声明本次写入的身份（写进审计记录）",
+                      "需要区分是哪个 AI / 人操作时")
+
+
+def _learn_json_opt():
+    return _learn_opt("--json", "", "以 JSON 输出", "脚本或自动化读取结果时")
+
+
+LEARN_HELP_MODEL = [
+    {"group": "学习闭环（.learnings）", "commands": [
+        {"name": "init", "usage": "init [--dir <目录>]",
+         "what": "初始化 .learnings/ 目录", "when": "第一次在项目里记录学习条目时",
+         "options": [_learn_dir_opt()]},
+        {"name": "log", "usage": "log [--type <类型>] [--category <分类>] [--priority <级别>] [--status <状态>] [--area <领域>] [--pattern-key <键>] [--message <摘要>] [--remember] [--dir <目录>]",
+         "what": "新建一条学习条目（学习 / 错误 / 功能需求）", "when": "命令失败、被纠正、发现更好做法或新洞见时",
+         "options": [
+             _learn_opt("--type", "<类型>", "条目类型：learning / error / feature",
+                        "决定条目归到哪个文件（LEARNINGS / ERRORS / FEATURE_REQUESTS）时"),
+             _learn_opt("--category", "<分类>", "原因分类：correction / insight / knowledge_gap / best_practice / error / other",
+                        "想按原因归类、后续统计时"),
+             _learn_opt("--priority", "<级别>", "优先级：low / medium / high / critical",
+                        "需要标注处理紧急程度时"),
+             _learn_opt("--status", "<状态>", "初始状态：pending / in_progress / resolved / wont_fix / promoted / promoted_to_skill",
+                        "创建时就已知处置状态时"),
+             _learn_opt("--area", "<领域>", "涉及模块 / 领域标签", "想按模块筛选条目时"),
+             _learn_opt("--pattern-key", "<键>", "同类问题的聚合键",
+                        "多个条目属于同一根因、想归并统计时"),
+             _learn_opt("--message", "<摘要>", "条目摘要（一行说清问题 / 洞见）",
+                        "不想交互输入、直接给定摘要时"),
+             _learn_opt("--remember", "", "同步写入元忆长期记忆",
+                        "这条经验需要跨会话保留时"),
+             _learn_dir_opt(),
+         ]},
+        {"name": "list", "usage": "list [--type <类型>] [--category <分类>] [--priority <级别>] [--status <状态>] [--area <领域>] [--json] [--dir <目录>]",
+         "what": "列出学习条目（可按字段筛选）", "when": "回看 / 盘点已记录的经验时",
+         "options": [
+             _learn_opt("--type", "<类型>", "只列某一类型（learning / error / feature）",
+                        "只看错误或只看功能需求时"),
+             _learn_opt("--category", "<分类>", "只列某一原因分类", "按原因过滤时"),
+             _learn_opt("--priority", "<级别>", "只列某一优先级", "只看高优条目时"),
+             _learn_opt("--status", "<状态>", "只列某一状态", "只看待处理或已解决时"),
+             _learn_opt("--area", "<领域>", "只列某一领域", "按模块过滤时"),
+             _learn_json_opt(),
+             _learn_dir_opt(),
+         ]},
+        {"name": "promote", "usage": "promote <LRN-ID> [--to <文件>] [--dir <目录>]",
+         "what": "把条目提升到 AGENTS.md / CLAUDE.md 常驻规则",
+         "when": "某条经验需要变成每次会话都读的规则时",
+         "options": [
+             _learn_opt("--to", "<文件>", "目标文件（默认 auto：CLAUDE.md 优先）",
+                        "想指定写到哪个规则文件时"),
+             _learn_dir_opt(),
+         ]},
+        {"name": "review", "usage": "review [--dir <目录>]",
+         "what": "回看待处理条目（按优先级列出）", "when": "定期复盘、清 pending 积压时",
+         "options": [_learn_dir_opt()]},
+        {"name": "stats", "usage": "stats [--dir <目录>]",
+         "what": "统计条目数量与分布", "when": "想看各类型 / 状态的积压情况时",
+         "options": [_learn_dir_opt()]},
+        {"name": "extract", "usage": "extract <LRN-ID> [--slug <名称>] [--out <目录>] [--dry-run] [--dir <目录>]",
+         "what": "由条目生成技能骨架（把经验沉淀成可复用技能）",
+         "when": "某条经验值得做成独立技能时",
+         "options": [
+             _learn_opt("--slug", "<名称>", "生成技能的 slug 名", "想指定技能目录名时"),
+             _learn_opt("--out", "<目录>", "技能骨架输出目录", "不想输出到默认位置时"),
+             _learn_opt("--dry-run", "", "只预览将生成的文件", "先看骨架结构再决定时",
+                        "预演只读，不写任何文件"),
+             _learn_dir_opt(),
+         ]},
+        {"name": "update", "usage": "update <LRN-ID> [--status <状态>] [--priority <级别>] [--note <说明>] [--dir <目录>]",
+         "what": "更新条目状态 / 优先级 / 处置说明", "when": "推进或关闭某条学习条目时",
+         "options": [
+             _learn_opt("--status", "<状态>", "新状态（同 log 的状态集合）",
+                        "推进 / 关闭条目时"),
+             _learn_opt("--priority", "<级别>", "新优先级", "调整处理顺序时"),
+             _learn_opt("--note", "<说明>", "处置说明（追加到 Resolution）",
+                        "记录为什么这么处理时"),
+             _learn_dir_opt(),
+         ]},
+        {"name": "resolve", "usage": "resolve <LRN-ID> [--note <说明>] [--dir <目录>]",
+         "what": "标记条目已解决（= update --status resolved）",
+         "when": "问题已修复 / 经验已落实时",
+         "options": [
+             _learn_opt("--note", "<说明>", "处置说明（追加到 Resolution）",
+                        "记录解决方式时"),
+             _learn_dir_opt(),
+         ]},
+    ]},
+    {"group": "知识库", "commands": [
+        {"name": "kb", "usage": "kb <子命令>",
+         "what": "知识库：分类 / 条目 / 索引 / 查询 / 审核 / 备份 / 回收站 / 快照",
+         "when": "沉淀、检索、治理已验证知识时",
+         "subcommands": [
+             {"name": "init", "usage": "init [--dir <目录>] [--agent <id>]",
+              "what": "初始化知识库（已存在拒绝覆盖）", "when": "第一次建库时",
+              "options": [_kb_dir_opt(), _kb_agent_opt()]},
+             {"name": "config", "usage": "config <set|get|clear>",
+              "what": "知识库位置配置（持久化根目录）", "when": "想换库位置或确认位置来源时",
+              "subcommands": [
+                  {"name": "set", "usage": "set --dir <路径> [--move [--from <源库>]] [--json]",
+                   "what": "持久化 KB 根目录（任意位置）", "when": "想把知识库放到指定位置时",
+                   "options": [
+                       _learn_opt("--dir", "<路径>", "新的知识库根目录（必填）",
+                                  "指定要持久化的位置时"),
+                       _learn_opt("--move", "", "把当前库迁移到新位置（复制 → 校验 → 切配置 → 旧库移出原位）",
+                                  "换位置并带上已有数据时",
+                                  "fail-closed：校验失败不切配置；旧库移入回收站前先确认完整"),
+                       _learn_opt("--from", "<源库>", "与 --move 连用：指定要迁移的源库（默认当前解析到的库）",
+                                  "源库不在当前解析位置时"),
+                       _learn_json_opt(),
+                   ]},
+                  {"name": "get", "usage": "get [--json]",
+                   "what": "显示解析结果与来源（--dir > YOTTA_LEARN_KB > 配置 > 默认）",
+                   "when": "确认当前生效的库位置时", "options": [_learn_json_opt()]},
+                  {"name": "clear", "usage": "clear [--json]",
+                   "what": "清除持久化配置", "when": "想恢复默认位置解析时",
+                   "options": [_learn_json_opt()]},
+              ]},
+             {"name": "category", "usage": "category <create|list|rename|merge|deprecate>",
+              "what": "分类注册表（任何 AI / 人皆可创建，带身份审计）",
+              "when": "治理分类体系时",
+              "subcommands": [
+                  {"name": "create", "usage": "create <slug> --name <中文名> --description <说明> [--alias <别名>] [--dir <目录>] [--agent <id>]",
+                   "what": "创建分类", "when": "新领域知识需要独立分类时",
+                   "options": [
+                       _learn_opt("--name", "<中文名>", "分类显示名（中文可读名）",
+                                  "给人看的名字时"),
+                       _learn_opt("--description", "<说明>", "一句话说明分类的收录范围",
+                                  "帮助后来者判断放哪时"),
+                       _learn_opt("--alias", "<别名>", "别名（可重复传）",
+                                  "同一分类有多种叫法时"),
+                       _kb_dir_opt(), _kb_agent_opt(),
+                   ]},
+                  {"name": "list", "usage": "list [--json] [--dir <目录>]",
+                   "what": "列出分类（含别名与状态）", "when": "盘点分类体系时",
+                   "options": [_learn_json_opt(), _kb_dir_opt()]},
+                  {"name": "rename", "usage": "rename <slug> --name <新中文名> [--dir <目录>] [--agent <id>]",
+                   "what": "重命名分类（仅显示名，slug 不变）", "when": "显示名不合适时",
+                   "options": [
+                       _learn_opt("--name", "<新中文名>", "新的分类显示名", "改名时"),
+                       _kb_dir_opt(), _kb_agent_opt(),
+                   ]},
+                  {"name": "merge", "usage": "merge <slug> --into <目标slug> [--dir <目录>] [--agent <id>]",
+                   "what": "合并分类（迁移条目 + 留别名）", "when": "两个分类重复或重叠时",
+                   "options": [
+                       _learn_opt("--into", "<目标slug>", "合并目标分类", "指定并入哪个分类时",
+                                  "源分类条目全部迁移，源分类留别名并停用"),
+                       _kb_dir_opt(), _kb_agent_opt(),
+                   ]},
+                  {"name": "deprecate", "usage": "deprecate <slug> [--reason <原因>] [--force] [--dir <目录>] [--agent <id>]",
+                   "what": "停用分类（空分类或 --force）", "when": "分类不再使用时",
+                   "options": [
+                       _learn_opt("--reason", "<原因>", "停用原因（写进审计）",
+                                  "留下治理线索时"),
+                       _learn_opt("--force", "", "非空分类也强制停用",
+                                  "确认条目已迁移或不再需要时",
+                                  "停用后查询默认不再命中该分类"),
+                       _kb_dir_opt(), _kb_agent_opt(),
+                   ]},
+              ]},
+             {"name": "add", "usage": "add --category <slug> [--title <标题>] [--message <正文>] [--tags <标签>] [--source <出处>] [--evidence <证据>] [--confidence <置信度>] [--from-learning <LRN-ID>] [--learnings-dir <目录>] [--json] [--dir <目录>] [--agent <id>]",
+              "what": "写入知识条目（默认草稿）", "when": "有可复用知识要沉淀时",
+              "options": [
+                  _learn_opt("--category", "<slug>", "条目所属分类 slug（必填）",
+                             "指定放到哪个分类时"),
+                  _learn_opt("--title", "<标题>", "标题（--from-learning 时可省略，默认取学习条目摘要）",
+                             "直接给标题时"),
+                  _learn_opt("--message", "<正文>", "正文（--from-learning 时可省略，自动生成）",
+                             "直接给正文时"),
+                  _learn_opt("--tags", "<标签>", "标签（逗号分隔，可重复传）",
+                             "想按标签检索时"),
+                  _learn_opt("--source", "<出处>", "出处（URL / 文件 / 会话；--from-learning 时默认取学习条目）",
+                             "需要可追溯时"),
+                  _learn_opt("--evidence", "<证据>", "证据摘要（复核时用）",
+                             "审核门要求留证时"),
+                  _learn_opt("--confidence", "<置信度>", "置信度：high / medium / low",
+                             "标注把握程度时"),
+                  _learn_opt("--from-learning", "<LRN-ID>", "从 .learnings 条目生成 KB 草稿（保留来源链接，走审核门）",
+                             "把已有学习条目升库时"),
+                  _learn_opt("--learnings-dir", "<目录>", ".learnings 所在目录（默认当前目录）",
+                             "源学习条目不在当前目录时"),
+                  _learn_json_opt(), _kb_dir_opt(), _kb_agent_opt(),
+              ]},
+             {"name": "list", "usage": "list [--category <slug>] [--status <状态>] [--tag <标签>] [--limit <条数>] [--json] [--dir <目录>]",
+              "what": "列出条目（管理视图，含草稿）", "when": "盘点 / 按条件查看条目时",
+              "options": [
+                  _learn_opt("--category", "<slug>", "只列某一分类", "按分类过滤时"),
+                  _learn_opt("--status", "<状态>", "只列某一状态：draft / verified / deprecated",
+                             "只看草稿或只看已核验时"),
+                  _learn_opt("--tag", "<标签>", "只列带某标签的条目（可重复传）",
+                             "按标签过滤时"),
+                  _learn_opt("--limit", "<条数>", "最多返回条数（0 = 不限）",
+                             "条目多、只想看前几条时"),
+                  _learn_json_opt(), _kb_dir_opt(),
+              ]},
+             {"name": "show", "usage": "show <ID> [--json] [--dir <目录>]",
+              "what": "查看条目全文", "when": "看某条知识的完整内容时",
+              "options": [_learn_json_opt(), _kb_dir_opt()]},
+             {"name": "update", "usage": "update <ID> [--title <标题>] [--message <正文>] [--tags <标签>] [--source <出处>] [--evidence <证据>] [--confidence <置信度>] [--dir <目录>] [--agent <id>]",
+              "what": "更新条目字段", "when": "修订已有条目的内容 / 标签时",
+              "options": [
+                  _learn_opt("--title", "<标题>", "新标题", "改标题时"),
+                  _learn_opt("--message", "<正文>", "新正文", "改内容时"),
+                  _learn_opt("--tags", "<标签>", "新标签（逗号分隔，可重复传）",
+                             "改标签时"),
+                  _learn_opt("--source", "<出处>", "新出处", "改来源时"),
+                  _learn_opt("--evidence", "<证据>", "新证据摘要", "补证据时"),
+                  _learn_opt("--confidence", "<置信度>", "新置信度：high / medium / low",
+                             "调整把握程度时"),
+                  _kb_dir_opt(), _kb_agent_opt(),
+              ]},
+             {"name": "deprecate", "usage": "deprecate <ID> --reason <原因> [--dir <目录>] [--agent <id>]",
+              "what": "停用条目（保留可查）", "when": "条目过时或不再适用时",
+              "options": [
+                  _learn_opt("--reason", "<原因>", "停用原因（必填，写进审计）",
+                             "留下治理线索时"),
+                  _kb_dir_opt(), _kb_agent_opt(),
+              ]},
+             {"name": "review", "usage": "review <ID> [--pass | --reject] [--note <备注>] [--evidence <证据>] [--force] [--dir <目录>] [--agent <id>]",
+              "what": "审核门（三问清单 / --pass / --reject）", "when": "草稿要转正式知识时",
+              "options": [
+                  _learn_opt("--pass", "", "核验通过（状态 → verified）", "确认三问都过时"),
+                  _learn_opt("--reject", "", "核验不通过（保持草稿）", "证据不足时"),
+                  _learn_opt("--note", "<备注>", "审核备注", "留下审核意见时"),
+                  _learn_opt("--evidence", "<证据>", "审核证据（建议填写）",
+                             "留证备查时"),
+                  _learn_opt("--force", "", "跳过三问清单强制通过", "确认风险可控时",
+                             "只在明确知道风险时使用"),
+                  _kb_dir_opt(), _kb_agent_opt(),
+              ]},
+             {"name": "query", "usage": "query <关键词...> [--category <slug>] [--status <状态>] [--tag <标签>] [--limit <条数>] [--include-draft] [--include-deprecated] [--json] [--dir <目录>]",
+              "what": "关键词查询（默认只出已核验）", "when": "开工查已有知识、避免重复踩坑时",
+              "options": [
+                  _learn_opt("--category", "<slug>", "只查某一分类", "缩小范围时"),
+                  _learn_opt("--status", "<状态>", "状态过滤（逗号分隔；默认 verified）",
+                             "想连草稿 / 停用一起查时"),
+                  _learn_opt("--tag", "<标签>", "只查带某标签的条目（可重复传）",
+                             "按标签缩小范围时"),
+                  _learn_opt("--limit", "<条数>", "返回条数（0 = 不限；默认 10）",
+                             "结果太多时"),
+                  _learn_opt("--include-draft", "", "包含草稿", "想看未审核内容时"),
+                  _learn_opt("--include-deprecated", "", "包含已停用条目",
+                             "想追溯历史条目时"),
+                  _learn_json_opt(), _kb_dir_opt(),
+              ]},
+             {"name": "index", "usage": "index <rebuild|status>",
+              "what": "索引管理", "when": "查询结果异常或核对索引健康时",
+              "subcommands": [
+                  {"name": "rebuild", "usage": "rebuild [--dir <目录>] [--agent <id>]",
+                   "what": "全量重建索引", "when": "索引与条目不一致时",
+                   "options": [_kb_dir_opt(), _kb_agent_opt()]},
+                  {"name": "status", "usage": "status [--json] [--dir <目录>]",
+                   "what": "索引健康状态", "when": "例行检查索引时",
+                   "options": [_learn_json_opt(), _kb_dir_opt()]},
+              ]},
+             {"name": "stats", "usage": "stats [--json] [--dir <目录>]",
+              "what": "统计（分类 / 条目 / 状态分布）", "when": "盘点知识库规模时",
+              "options": [_learn_json_opt(), _kb_dir_opt()]},
+             {"name": "doctor", "usage": "doctor [--json] [--backup-dir <目录>] [--dir <目录>]",
+              "what": "体检（结构 / 索引 / 引用一致性）", "when": "开工检查或异常排查时",
+              "options": [
+                  _learn_json_opt(),
+                  _learn_opt("--backup-dir", "<目录>", "额外体检的备份目录",
+                             "想连备份一起检查时"),
+                  _kb_dir_opt(),
+              ]},
+             {"name": "backup", "usage": "backup <create|list|restore>",
+              "what": "备份（独立目标目录）", "when": "留恢复点 / 迁移前保护数据时",
+              "subcommands": [
+                  {"name": "create", "usage": "create --out <备份目录> [--dir <目录>] [--agent <id>]",
+                   "what": "创建备份", "when": "改库前留恢复点时",
+                   "options": [
+                       _learn_opt("--out", "<备份目录>", "备份输出目录（必填）",
+                                  "指定备份写到哪时"),
+                       _kb_dir_opt(), _kb_agent_opt(),
+                   ]},
+                  {"name": "list", "usage": "list --out <备份目录> [--json]",
+                   "what": "列出备份", "when": "选恢复点时",
+                   "options": [
+                       _learn_opt("--out", "<备份目录>", "备份目录（必填）",
+                                  "列出哪个目录的备份时"),
+                       _learn_json_opt(),
+                   ]},
+                  {"name": "restore", "usage": "restore <名称> --out <备份目录> --into <目标目录> [--force] [--agent <id>]",
+                   "what": "从备份恢复（目标非空需 --force）", "when": "误删或迁移后恢复时",
+                   "options": [
+                       _learn_opt("--out", "<备份目录>", "备份所在目录（必填）",
+                                  "指定从哪读备份时"),
+                       _learn_opt("--into", "<目标目录>", "恢复目标目录（必填）",
+                                  "指定恢复到哪时"),
+                       _learn_opt("--force", "", "目标非空时允许覆盖",
+                                  "确认目标可以覆盖时",
+                                  "可能覆盖目标现有内容；先确认目标和备份"),
+                       _kb_agent_opt(),
+                   ]},
+              ]},
+             {"name": "trash", "usage": "trash <list|purge>",
+              "what": "回收站（删除条目先入回收站）", "when": "恢复误删或清理过期数据时",
+              "subcommands": [
+                  {"name": "list", "usage": "list [--json] [--dir <目录>]",
+                   "what": "列出回收站", "when": "想恢复某条误删内容时",
+                   "options": [_learn_json_opt(), _kb_dir_opt()]},
+                  {"name": "purge", "usage": "purge [--days <天数>] [--all] [--dir <目录>] [--agent <id>]",
+                   "what": "清理过期回收站（默认 7 天）", "when": "回收站积压时",
+                   "options": [
+                       _learn_opt("--days", "<天数>", "保留天数（默认 7 天）",
+                                  "想调整保留窗口时"),
+                       _learn_opt("--all", "", "全部清空（含未过期）",
+                                  "确认都不需要时",
+                                  "清空后不可恢复"),
+                       _kb_dir_opt(), _kb_agent_opt(),
+                   ]},
+              ]},
+             {"name": "snapshot", "usage": "snapshot <list|restore>",
+              "what": "快照（破坏性操作前自动创建）", "when": "回退到操作前状态时",
+              "subcommands": [
+                  {"name": "list", "usage": "list [--json] [--dir <目录>]",
+                   "what": "列出快照", "when": "选回退点时",
+                   "options": [_learn_json_opt(), _kb_dir_opt()]},
+                  {"name": "restore", "usage": "restore <名称> [--dir <目录>] [--agent <id>]",
+                   "what": "恢复快照", "when": "想回退到某次操作前时",
+                   "options": [_kb_dir_opt(), _kb_agent_opt()]},
+              ]},
+         ]},
+    ]},
+    {"group": "管理台", "commands": [
+        {"name": "view", "usage": "view [--port <端口>] [--dir <目录>]",
+         "what": "启动本地知识库管理台（仅 127.0.0.1）",
+         "when": "想图形化浏览 / 操作知识库时",
+         "options": [
+             _learn_opt("--port", "<端口>", "端口（默认 8791；0 = 随机空闲端口，自动化用）",
+                        "端口冲突或想固定端口时", "仅监听 127.0.0.1"),
+             _kb_dir_opt(),
+         ]},
+    ]},
+]
+
+
+def cli_help_model():
+    """结构化帮助模型（面板 / 官网 / 覆盖门禁的单一真源）。"""
+    return LEARN_HELP_MODEL
 
 
 def cli_subparser_choices(parser):

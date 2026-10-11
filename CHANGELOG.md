@@ -1,5 +1,13 @@
 # 更新日志
 
+## v0.5.1 (2026-10-11)
+
+- **管理台「高级 / CLI」完整帮助结构化（UX-L-01）**：完整帮助区从 argparse 英文原文（44 命令路径 / 132 行参数）改为元忆同款结构化渲染 —— 分组 → 命令 / 子命令（可折叠 `<details>`）→ 中文 usage 行 + 参数逐条说明（`--flag <参数>` + 做什么 + 什么时候用 + 风险提示），每行带「复制」按钮；「复制全部」保留（仍复制纯文本帮助，终端友好）。
+- **新增单一真源 `LEARN_HELP_MODEL`**：44 命令路径（学习闭环 9 + kb 子树 33 + view 1）全量中文说明 + 全部选项逐条 `what` / `when`；`/api/cli` 增加结构化 `groups` 字段（面板使用；后续官网 /product/ 收录复用同一模型）。
+- **覆盖门禁**：新增 `scripts/test_yotta_learn_help.py` —— 与 `build_parser()` 双向对账（路径集合相等 / 全部选项一一对应且说明非空 / usage 以条目名开头），并带反例自检（缺说明、幽灵条目必须被同一算法判失败）；已接入 `npm test` 全链。
+- 走查脚本 `tools/check_learn_view.js` 更新：断言结构化完整帮助（命令 / 子命令 / 参数行计数 + `kb category create` 代表行 + 不再输出 argparse 原文 + 复制全部按钮保留）。
+- **修复：精简分发副本（不带 `assets/`）下面板不可用**：此前 `view` 只从 `assets/view.html` 读模板，精简副本运行时报「面板资源缺失」；现在面板模板嵌入运行时（`VIEW_HTML_EMBEDDED` 生成块，`assets/view.html` 仍是编辑真源、由 `tools/sync_learn_view_html.py` 同步），`load_html()` 以嵌入副本为运行时真源；新增嵌入一致性回归（逐字节断言 + `load_html` 不依赖 assets）与 preflight 专属检查。
+
 ## v0.5.0 (2026-10-11)
 
 - **npm 运行时入口（dispatcher）**：`yotta-learn` 不再只是安装器 —— 新增 `bin/yotta-learn.js`：`yotta-learn view` / `yotta-learn kb …` / `yotta-learn <学习命令>` 直接运行知识库与学习闭环（转发 Python 运行时，解释器探测 `YOTTA_LEARN_PYTHON` → `py -3` → `python` → `python3`）；`yotta-learn install …` 与旧旗标（`--agent` / `--dir` / `-g` / `--list` / `--dry-run`）保持安装行为；`--version` / `--help` 显示运行时帮助与安装指引；新增 `yotta-learn-install` 纯安装器入口（对齐元忆）。

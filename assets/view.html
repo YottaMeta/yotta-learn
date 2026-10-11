@@ -85,7 +85,27 @@ pre.body{background:#fbfcfd;border:1px solid var(--line);border-radius:6px;paddi
 .quick-item code{font-family:var(--mono);font-size:12px;word-break:break-all}
 .quick-item .note{color:var(--ink-3);font-size:12px;margin-top:2px}
 .quick-item button{flex:none}
-pre.cli-full{background:#fbfcfd;border:1px solid var(--line);border-radius:6px;padding:10px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;max-height:480px;overflow:auto;margin-top:10px}
+.cli-full{margin-top:10px;max-height:520px;overflow:auto}
+.help-cmd{border:1px solid var(--line);border-radius:6px;background:#fbfcfd;margin-top:8px;min-width:0}
+.help-cmd summary{cursor:pointer;padding:8px 11px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;list-style:none}
+.help-cmd summary::-webkit-details-marker{display:none}
+.help-cmd summary::before{content:'';width:6px;height:6px;border-right:1.6px solid var(--ink-3);border-bottom:1.6px solid var(--ink-3);transform:rotate(-45deg);transition:transform .15s;flex:none}
+.help-cmd[open] summary::before{transform:rotate(45deg)}
+.help-body{padding:10px 11px;display:flex;flex-direction:column;gap:7px;border-top:1px solid var(--line)}
+.help-sub{border-top:1px dashed var(--line);padding-top:7px;margin-top:2px;display:flex;flex-direction:column;gap:5px}
+.help-sub .cmd-name{color:var(--ink)}
+.cmd-name{font-family:var(--mono);font-size:12px;color:var(--accent)}
+.cmd-what{font-weight:600;font-size:13px}
+.cmd-when{color:var(--ink-3);font-size:12px}
+.code-line{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0}
+.code-line code{flex:1;min-width:0;font-family:var(--mono);font-size:12px;overflow-x:auto;white-space:nowrap}
+.code-line button{flex:none;padding:3px 9px;font-size:12px}
+.opt-row{display:grid;grid-template-columns:minmax(140px,auto) minmax(0,1fr);gap:2px 10px;padding:6px 0;border-top:1px dashed var(--line);font-size:12px}
+.opt-row:first-child{border-top:0}
+.opt-flag{font-family:var(--mono);word-break:break-all}
+.opt-what{color:var(--ink-2)}
+.opt-when{color:var(--ink-3)}
+.opt-risk{color:var(--danger)}
 .notice{border-radius:6px;padding:8px 10px;font-size:12.5px;margin-top:8px}
 .notice.warn{background:var(--warn-soft);color:var(--warn);border:1px solid #f0ddb8}
 .notice.err{background:var(--danger-soft);color:var(--danger);border:1px solid #f2caca}
@@ -233,6 +253,33 @@ async function copyText(text){
   }catch(e){return false;}
 }
 
+function helpOptRows(options){
+  return (options||[]).map(o=>'<div class="opt-row"><div class="opt-flag">'+esc(o.flag+(o.arg?' '+o.arg:''))+'</div><div>'+
+    '<div class="opt-what">'+esc(o.what||'')+'</div>'+
+    (o.when?'<div class="opt-when">'+esc(o.when)+'</div>':'')+
+    (o.caution?'<div class="opt-risk">'+esc(o.caution)+'</div>':'')+
+    '</div></div>').join('');
+}
+function helpCodeLine(text){
+  return '<div class="code-line"><code>'+esc(text)+'</code><button class="ghost" data-copy="'+esc(text)+'">复制</button></div>';
+}
+function helpSubHtml(parent,s){
+  const full=parent+' '+s.name;
+  const inner=(s.subcommands||[]).map(ss=>helpSubHtml(full,ss)).join('');
+  return '<div class="help-sub"><div><code class="cmd-name">'+esc(s.name)+'</code></div>'+
+    (s.what?'<div class="cmd-what">'+esc(s.what)+'</div>':'')+
+    (s.when?'<div class="cmd-when">'+esc(s.when)+'</div>':'')+
+    helpCodeLine('yotta-learn '+full+' '+s.usage)+helpOptRows(s.options)+inner+'</div>';
+}
+function renderFullHelp(d){
+  return (d.groups||[]).map(g=>'<div class="quick-group"><h4>'+esc(g.group)+'</h4>'+
+    (g.commands||[]).map(c=>{
+      const subs=(c.subcommands||[]).map(s=>helpSubHtml(c.name,s)).join('');
+      return '<details class="help-cmd"><summary><code class="cmd-name">'+esc(c.name)+'</code><span class="cmd-what">'+esc(c.what)+'</span></summary>'+
+        '<div class="help-body">'+(c.when?'<div class="cmd-when">'+esc(c.when)+'</div>':'')+
+        helpCodeLine('yotta-learn '+c.usage)+helpOptRows(c.options)+subs+'</div></details>';
+    }).join('')+'</div>').join('');
+}
 async function renderCli(seq){
   setTitle('高级 / CLI');
   const d=await api('/api/cli');
@@ -246,14 +293,16 @@ async function renderCli(seq){
     quick+
     '<div style="margin-top:10px"><button class="ghost" id="btnFullHelp">查看完整帮助</button> '+
     '<button class="ghost" id="btnCopyFull" hidden>复制全部</button></div>'+
-    '<pre class="cli-full" id="cliFull" hidden></pre></div>';
-  $('#view').querySelectorAll('button[data-copy]').forEach(b=>{
+    '<div class="cli-full" id="cliFull" hidden></div></div>';
+  const bindCopy=root=>{root.querySelectorAll('button[data-copy]').forEach(b=>{
     b.onclick=async()=>{const ok=await copyText(b.dataset.copy);
       toast(ok?'已复制：'+b.dataset.copy:'复制失败，请手动选择复制',ok?'ok':'err');};
-  });
+  });};
+  bindCopy($('#view'));
   $('#btnFullHelp').onclick=()=>{
-    const el=$('#cliFull');el.hidden=!el.hidden;
-    el.textContent=el.hidden?'':(d.full||'');
+    const el=$('#cliFull');
+    if(el.hidden&&!el.dataset.rendered){el.innerHTML=renderFullHelp(d);el.dataset.rendered='1';bindCopy(el);}
+    el.hidden=!el.hidden;
     $('#btnCopyFull').hidden=el.hidden;
     $('#btnFullHelp').textContent=el.hidden?'查看完整帮助':'收起完整帮助';
   };

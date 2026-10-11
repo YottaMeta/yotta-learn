@@ -131,6 +131,28 @@ def test_http_flow(tmp):
         check("cli 端点完整帮助来自 argparse 单一真源",
               "usage" in data.get("full", "") and "kb" in data.get("full", "")
               and "category" in data.get("full", ""), body[:200])
+        groups = data.get("groups", [])
+        kb = None
+        for g in groups:
+            for c in g.get("commands", []):
+                if c.get("name") == "kb":
+                    kb = c
+        check("cli 端点结构化帮助模型（分组 + kb 子树）",
+              len(groups) >= 3 and kb is not None
+              and any(s.get("name") == "category" for s in kb.get("subcommands", [])),
+              body[:200])
+        create = None
+        if kb:
+            for s in kb.get("subcommands", []):
+                if s.get("name") == "category":
+                    for ss in s.get("subcommands", []):
+                        if ss.get("name") == "create":
+                            create = ss
+        check("cli 结构化模型含逐条中文说明（category create）",
+              create is not None
+              and all(o.get("what") for o in create.get("options", []))
+              and any(o.get("flag") == "--description" for o in create.get("options", [])),
+              body[:200])
 
         code, _body, _h = http("POST", base + "/api/action",
                                payload={"action": "entry.add"})
@@ -301,6 +323,16 @@ def test_legacy_write_block(tmp):
                 os.environ[key] = value
 
 
+def test_embedded_view_sync():
+    assets = (_HERE.parent / "assets" / "view.html").read_text(encoding="utf-8")
+    check("面板嵌入副本与 assets/view.html 逐字节一致（SkillHub 副本不带 assets 也可用）",
+          v.VIEW_HTML_EMBEDDED == assets and len(assets) > 30000,
+          "embedded=%d assets=%d" % (len(v.VIEW_HTML_EMBEDDED), len(assets)))
+    check("load_html 以嵌入副本为运行时真源",
+          v.load_html() == v.VIEW_HTML_EMBEDDED and bool(v.VIEW_HTML_EMBEDDED),
+          "len=%d" % len(v.load_html()))
+
+
 def main():
     tmp = tempfile.mkdtemp(prefix="yottalearn-view-test-")
     home = Path(tmp) / "home"
@@ -308,6 +340,7 @@ def main():
     os.environ["USERPROFILE"] = str(home)
     os.environ["HOME"] = str(home)
     try:
+        test_embedded_view_sync()
         test_security_helpers()
         test_http_flow(tmp)
         test_legacy_write_block(tmp)
