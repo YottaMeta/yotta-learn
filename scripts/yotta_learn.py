@@ -54,7 +54,7 @@ try:
 except Exception:
     pass
 
-VERSION = "0.5.1"
+VERSION = "0.6.0"
 TOOL_NAME = "yotta-learn"
 
 # 类型 → (ID 前缀, 文件名, 显示名)

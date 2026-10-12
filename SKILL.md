@@ -1,45 +1,70 @@
 ---
 name: yotta-learn
-version: 0.5.1
-description: 元习 —— 跨智能体的学习闭环 + 知识库技能：把错误、纠正与洞见沉淀为 .learnings/ 条目，把验证过的知识存入分类索引的知识库（关键词查询），并提供 MCP stdio 接口与本地图形化管理台（view）。触发：命令失败、用户纠正、发现更好的做法、请求缺失能力、外部接口故障、知识过时、需要沉淀或查询知识时；或用户说 记一笔/学习/沉淀/知识库/kb/查知识/self-improvement/learnings 等。边界：不写入私密/敏感信息（除非用户明确要求）；不自动改动系统文件。
+version: 0.6.0
+description: 元习 —— 跨智能体的知识库技能：把跨项目可复用的经验、方法、避坑与教程沉淀进分类知识库（草稿 → 审核 → 可检索），供所有智能体与项目复用；首次使用由 AI 引导初始化知识库位置并自动接入 MCP。触发：值得沉淀的时刻（命令失败 / 被用户纠正 / 发现更好做法 / 知识过时 / 请求缺失能力 / 外部接口故障）与需要查询知识的时刻（开工前 / 动手解决不显然问题前 / 用户问"以前怎么解决的"）；或用户说 知识库 / kb / 查知识 / 记一笔 / 沉淀 / 经验 / 踩坑 / self-improvement / learnings 等。边界：私密 / 敏感信息不写入知识库（走元忆私密区）；项目专属经验写项目自身文件；不自动改动系统文件。
 license: MIT
 ---
 
 # 元习（yotta-learn）
 
-把「这次学到的」变成「下次可复用的」：记录错误、纠正与洞见，供后续会话与技能改进复用。
+把「这次学到的」变成「下次可复用的」：跨项目通用的**经验、方法、避坑与教程**沉淀进**分类知识库（KB）**，供后续会话与其他智能体检索复用。
 
-- **沉淀**：log 命令把条目写入 .learnings/（LEARNINGS / ERRORS / FEATURE_REQUESTS），自动编号 + 时间戳。
-- **闭环**：update / resolve 更新条目状态与处置；list / review / stats 回看与统计；promote 提升到 AGENTS.md / CLAUDE.md；extract 生成技能骨架；Pattern-Key 追踪复发模式。
-- **知识库（KB）**：kb 命令组把验证过的知识沉淀为分类条目 —— 分类注册、草稿 / 核验、分片索引、关键词查询、审计、回收站、快照与备份；任何智能体经 CLI 读写。
-- **联动**：log --remember 可选同步到 yotta-memory（元忆），未安装/失败自动降级，绝不阻断本地记录。
+## 使用模型（先读这一节）
 
-零依赖（Python 3.8+ 标准库），Windows + Linux 通用。
+### 归位决策树：这条东西写哪里？
 
-## 何时使用
+| # | 判据 | 去向 |
+| --- | --- | --- |
+| 1 | 私密 / 敏感（令牌、个人信息、关系、本机内部数据） | 元忆私密区（PREF / BOUND / COMMIT）；绝不进 KB 与项目公开文件 |
+| 2 | 只对当前项目成立（仓库怪癖、部署细节、项目决策依据） | 项目自身载体（AGENTS.md / docs / 项目状态与任务文件等），直接写目的地 |
+| 3 | 跨项目可复用知识（方法 / 流程 / 避坑 / 教程） | 本技能 KB：`kb add`（草稿）→ 三问审核 → verified |
+| 4 | 事实 / 结论 / 红线（跨项目共享的记忆型信息） | 元忆 FACT +（长期红线）机器级记忆锚点 |
+| 5 | 已成熟、可流程化的经验 | 技能化（护栏 / 门禁 / 清单 / 规则） |
 
-- 命令或操作意外失败；
-- 用户纠正了你（"不对，应该这样…"）；
-- 发现了更好的做法 / 知识已过时；
-- 用户请求了尚不存在的能力；
-- 解决了一个不显然的问题，值得沉淀；
-- 开始重要任务前，先 review 待处理条目。
-- 想把一条验证过的经验 / 知识沉淀给其他会话或其他智能体复用；
-- 需要按关键词查询已有知识（如「发布流程」「SQLite 检索」）。
+一句话：**「事」进元忆，「法」进知识库，「项目专属」进项目，「未定形」进 KB 草稿。**
 
-**Do NOT trigger**：不记录私密信息（令牌、密钥、环境变量值、完整源码）除非用户明确要求；推荐用摘要或脱敏片段。知识库只存知识不存私密：审核门会扫描密钥 / 个人信息 / 本机路径并阻断。
+- 进 KB 前过**三问**：验证过？自包含？无敏感？（`kb review` 使用同一标准）
+- **写前查重**：先 `kb query` / `kb list`，已有同题就更新，不新建。
+- 旧 `.learnings/` 已退役为遗留兼容（见下文专节）：新知识不再默认写入。
 
-`--category` 是固定枚举：`correction` / `insight` / `knowledge_gap` / `best_practice` / `error` / `other`。
-不确定时用 `other`；非法值会退出码 4 并列出全部可用值。
+### 写 / 查时机
+
+**什么时候写**（按归位决策树定位后立即写，不积攒）：
+
+- 事件驱动：命令失败、被用户纠正、发现更好做法、知识过时、请求缺失能力、外部接口故障；
+- 周期驱动：批次复盘三问（能否护栏化？能否复用？归哪层？）、周级 review（草稿 → verified / 合并 / 废弃）、月级自评。
+
+**什么时候查**（默认动作，不靠自觉）：
+
+- 开工时：按当前任务关键词 `kb query <关键词>`（结果为空再动手）；
+- 动手解决"不显然"的问题之前：先查有没有现成经验；
+- 沉淀前：查重；
+- 复盘时：`kb list --status draft` 过一遍草稿。
+
+### 分类治理
+
+- **复用优先**：写前先 `kb category list` 看现有分类，能装下就复用；
+- **新建门槛**：现有分类都无法容纳才新建；slug 用小写连字符，名称与描述必填；
+- **一条一主分类**：检索补充用 `--tags`；
+- **周期治理**：周级 review 时用 `kb category merge` / `kb category deprecate` 合并或停用碎片分类。
+
+## 首次使用：激活知识库（AI 必做）
+
+首次加载本技能时，AI 先运行 `kb config get` 判定状态，然后：
+
+1. **未初始化**：向用户说明用途 → 请用户确认库位置（默认 `~/.yottalearn/knowledge`，可指定其它位置）→ 用户确认后执行初始化（默认位置直接 `kb init`；指定其它位置先 `kb config set --dir <路径>` 再 `kb init`）；
+2. **写「发现锚点」**：把库位置与查询方式写入机器级记忆（各宿主全局 AGENTS.md 等效文件），让后续会话与其他智能体都能发现；
+3. **自动接入 MCP**：把本技能的 MCP server 写入当前客户端 `mcpServers`（见「AI 接口（MCP）」），并写永久记忆护栏；未加载时自动降级 CLI；
+4. **自检回报**：`kb stats` 确认可用（0 条也算成功激活）。
+
+位置由用户确认（数据主权）；其余步骤全部由 AI 执行。同机后续智能体读取同一 `~/.yottalearn/config.json`（单一真源），只需完成第 3 步的 MCP 接入即可共享同一库。
 
 ## 命令入口
 
 两种等价用法，按可用性择一：
 
-- **已装 CLI**：`yotta-learn <命令>` —— 如 `yotta-learn view`（图形管理台）、`yotta-learn kb query 关键词`。npm 安装包自带该入口。
-- **技能目录直跑**：`python3 scripts/yotta_learn.py <命令>` —— 与 CLI 写法完全等价（CLI 内部转发到同一脚本）。
-
-以下示例统一用技能目录直跑写法；把 `python3 scripts/yotta_learn.py` 前缀替换为 `yotta-learn` 即为已装 CLI 写法。
+- **已装 CLI**：`yotta-learn <命令>` —— 如 `yotta-learn kb query 关键词`、`yotta-learn view`（图形管理台）。
+- **技能目录直跑**：`python3 scripts/yotta_learn.py <命令>` —— 与 CLI 完全等价。
 
 安装 / 更新技能本体（把技能装进智能体目录，不是装 CLI）：
 
@@ -49,103 +74,73 @@ npx -y @yottameta/yotta-learn --agent <名称>           # 旧用法兼容（等
 # 全局安装后专属安装器入口同样可用：yotta-learn-install --agent <名称>
 ```
 
-## 快速使用
+## 知识库（KB）
+
+- 位置：默认 `~/.yottalearn/knowledge`（配置 `~/.yottalearn/config.json`）；优先级 `--dir` > `YOTTA_LEARN_KB` > 配置 > 默认。旧版位置只读兼容：回退生效时写操作 fail-closed 并提示一次性迁移；迁移用 `kb config set --dir <新位置> --move`。
+- 结构：`categories/<slug>/`（category.json + entries/ + index.json）+ 全局索引 + 审计 + 回收站 + 快照。
+- 条目：Markdown + 受控 frontmatter；ID `KB-YYYYMMDD-XXX`；状态机 draft（默认）→ verified → deprecated。
+- 查询：中文 bigram + 单字兜底；默认只出 verified（`--include-draft` 可含草稿）。
+- 审核门：`kb review <ID> --pass --evidence "..."`（核验需证据）；敏感 / 疑似重复会阻断，可用 `--force --note "说明"` 留审计放行。
+- 常用命令：
 
 ```bash
-# 初始化 .learnings/（幂等，不覆盖已有文件）
-python3 scripts/yotta_learn.py init
-
-# 记录一条学习（自动生成 ID 如 LRN-20260826-001）
-python3 scripts/yotta_learn.py log --type learning --category correction \\
-  --priority high --area git --pattern-key push-gate \\
-  --message "推送前必须先跑测试并核对输出"
-
-# 记录一条错误（第二行起进入 Details）
-python3 scripts/yotta_learn.py log --type error --priority critical \\
-  --message "第一行是摘要"$'\n'"第二行是详情"
-
-# 列出 / 回看 / 统计
-python3 scripts/yotta_learn.py list --status pending
-python3 scripts/yotta_learn.py review
-python3 scripts/yotta_learn.py stats
-
-# 提升到 AGENTS.md / CLAUDE.md（自动去重）
-python3 scripts/yotta_learn.py promote LRN-20260826-001
-
-# 闭环：更新状态 / 处置说明（resolve = update --status resolved）
-python3 scripts/yotta_learn.py update LRN-20260826-001 --status in_progress --note "处理中"
-python3 scripts/yotta_learn.py resolve LRN-20260826-001 --note "已修复并回归"
-
-# 由条目生成技能骨架
-python3 scripts/yotta_learn.py extract LRN-20260826-001 --slug my-skill --dry-run
-
-# 可选：同步到元忆（yotta-memory），未安装自动降级
-python3 scripts/yotta_learn.py log --message "..." --remember
-
-# 知识库：初始化 → 分类 → 写入草稿 → 核验 → 查询
-python3 scripts/yotta_learn.py kb init
-python3 scripts/yotta_learn.py kb category create agent-skills \
-  --name "智能体与技能开发" --description "技能开发与编排相关知识与方法"
-python3 scripts/yotta_learn.py kb add --category agent-skills \
-  --title "SQLite FTS5 中文检索的坑" \
-  --message "默认分词对中文不友好，需要 bigram 或外部分词器。" \
-  --tags "sqlite,检索" --source "experiment"
-python3 scripts/yotta_learn.py kb review KB-20261005-001 --pass --evidence "本地实测通过"
-python3 scripts/yotta_learn.py kb query 中文检索
-
-# 升库：把 .learnings 条目转成 KB 草稿（保留来源引用，仍走审核门）
-python3 scripts/yotta_learn.py kb add --from-learning LRN-20260826-001 \
-  --category agent-skills
-
-# 本地图形化管理台（仅 127.0.0.1；页面内嵌会话令牌）
-python3 scripts/yotta_learn.py view --port 8791
+yotta-learn kb init                                   # 初始化（幂等；已存在拒绝覆盖）
+yotta-learn kb config get                             # 位置与状态（未初始化会给引导提示）
+yotta-learn kb category create <slug> --name "..." --description "..."
+yotta-learn kb add --category <slug> --title "..." --message "..." --source "..."
+yotta-learn kb review <KB-ID> --pass --evidence "..."
+yotta-learn kb query <关键词>
+yotta-learn kb list --status draft
+yotta-learn kb doctor                                 # 体检
+yotta-learn kb backup create --out <目录>              # 备份
+yotta-learn view                                      # 图形管理台（仅 127.0.0.1:8791）
 ```
 
-## 数据协议（.learnings/）
+- 完整命令面、数据协议与可靠性说明：`references/kb.md`。
 
-- 目录：项目根 .learnings/（可用 --dir 指定）。
-- 文件：LEARNINGS.md（LRN-）、ERRORS.md（ERR-）、FEATURE_REQUESTS.md（FEAT-）。
-- ID：LRN/ERR/FEAT-YYYYMMDD-XXX（同一天自增）。
-- 字段：Logged / Priority / Status / Area / Pattern-Key；正文分 Summary 与 Details。
-- 兼容：已有用户数据保留，初始化绝不覆盖；旧格式条目可读。
+## AI 接口（MCP）
 
-## 知识库（KB v1）
+`scripts/yotta_learn_mcp.py`（stdio；读 kb_query / kb_get / kb_list / kb_stats / kb_categories，写 kb_add / kb_review / kb_update / kb_deprecate / kb_category_*，运维 kb_doctor / kb_index_rebuild；写工具 fail-closed，与 CLI 同源）。
 
-- 位置：默认 `~/.yottalearn/knowledge`（配置 `~/.yottalearn/config.json`）；优先级 `--dir` > `YOTTA_LEARN_KB` > 配置 > 默认。旧版位置（`~/.yottaskills/yotta-learn.json` / `~/.yottaskills/knowledge`）只读兼容：回退生效时读操作可用，写操作 fail-closed（exit 5）并提示一次性迁移。
-- 迁移：`kb config set --dir <新位置> --move`（复制 → doctor + 内容摘要双校验 → 切配置 → 旧库移出原位）；不带 `--move` 只切指针并明确提示「旧库未迁移」，可用 `--move --from <旧库>` 补迁。
-- 结构：`categories/<slug>/`（category.json + entries/ + index.json）+ `index/`（全局词表 / 统计）+ `audit/` + `.trash/` + `snapshots/`。
-- 条目：Markdown + 受控 frontmatter（单行键值；字符串单引号；数组 JSON）；ID `KB-YYYYMMDD-XXX`。
-- 状态机：draft（默认）→ verified（review --pass 需证据）→ deprecated；reject 入回收站（保留 7 天）。
-- 查询：中文 bigram + 单字兜底；默认只出 verified；索引漂移自动降级线性扫描。
-- 升库：`kb add --from-learning <LRN-ID>` 把 .learnings 条目转成 KB 草稿（保留可移植来源引用，仍走审核门）。
-- AI 接口（MCP）：`scripts/yotta_learn_mcp.py`（stdio；读 kb_query/kb_get/kb_list/kb_stats/kb_categories，写 kb_add/kb_review/kb_update/kb_deprecate/kb_category_create/kb_category_rename/kb_category_merge/kb_category_deprecate，运维 kb_doctor/kb_index_rebuild；写工具 fail-closed，与 CLI 同源）。
-  AI 自动接入：首次使用时由 AI 把该 server 写入客户端 `mcpServers` 并写永久记忆护栏；未加载自动降级 CLI。配置示例：
-  ```json
-  {"mcpServers":{"yotta-learn":{"command":"python","args":["<技能目录>/scripts/yotta_learn_mcp.py"]}}}
-  ```
-- 图形化管理台：`yotta-learn view`（默认 `127.0.0.1:8791`；本机会话令牌 + 破坏性确认串 + 审计；八视图：总览 / 分类 / 条目 / 搜索 / 审核 / 位置 / 运维 / 高级 CLI（常用命令速查 + 完整帮助，与 argparse 单一真源））。
-- 完整命令面、协议与可靠性说明：references/kb.md。
+**AI 自动接入**：首次使用时把该 server 写入客户端 `mcpServers` 并写永久记忆护栏；未加载自动降级 CLI。配置示例：
+
+```json
+{"mcpServers":{"yotta-learn":{"command":"python","args":["<技能目录>/scripts/yotta_learn_mcp.py"]}}}
+```
+
+## `.learnings` 遗留兼容
+
+`.learnings/`（LEARNINGS / ERRORS / FEATURE_REQUESTS）是本技能旧版的**项目内原始捕获区**，现已退役为遗留形态：
+
+- **不再默认写入**：新知识按「归位决策树」直达归宿（项目自身文件 / KB / 元忆）。
+- **已有数据可用**：旧命令（`log` / `list` / `review` / `update` / `resolve` / `promote` / `extract`）全部保留，用于读取、处置与迁移已有条目；`init` 幂等，不覆盖任何已有文件。
+- **迁移**：跨项目可复用的条目用 `kb add --from-learning <LRN-ID> --category <slug>` 转成 KB 草稿（仍走审核门）；项目专属条目按决策树第 2 条写进项目自身文件。
+- 字段与示例见 `references/examples.md`。
 
 ## 元忆联动（可选）
 
-- 显式开启：log --remember。
-- 运行时探测元忆：未安装 → A；已安装未初始化 → B；失败/超时 → C。
-- 降级 A/B/C 只提示，绝不阻断本地 .learnings/ 记录。
+- 遗留条目路径支持 `log --remember` 同步到元忆（yotta-memory）；未安装 / 未初始化 / 失败自动降级（A / B / C），只提示、不阻断。
 - 不写入 package.json 依赖。
 
 ## Hook 模板
 
-见 hooks/ 目录：Claude Code（claude-settings.json）、Codex（codex-settings.json）、
-OpenClaw（openclaw-setup.md）；activator.sh / error-detector.sh 为 Linux-only 的可选 bash hook。
+见 hooks/ 目录：Claude Code（claude-settings.json）、Codex（codex-settings.json）、OpenClaw（openclaw-setup.md）；activator.sh / error-detector.sh 为 Linux-only 可选 bash hook。当前 hook 仍指向遗留 `.learnings` 捕获路径，后续批次再改造。
 
 ## 参考
 
-- references/examples.md — 记录示例与字段说明
 - references/kb.md — 知识库完整命令面、数据协议与可靠性说明
-- references/hooks-setup.md — 各智能体 hook 接入详细步骤
-- references/walkthroughs.md — 命令失败 / 用户纠正 / 接口降级三类复杂走查
-- references/faq.md — 常见问题速查与安装排障
+- references/faq.md — 常见问题速查（条目写哪 / 首装激活 / 审核 / 备份 / 报错）
+- references/walkthroughs.md — 命令失败 / 用户纠正 / 接口降级三类走查（按新归位模型）
+- references/examples.md — 遗留 `.learnings` 字段与示例
+- references/hooks-setup.md — 各智能体 hook 接入步骤
 
-## 常见问题（速查）
+## 何时使用（速查）
 
-条目写哪、重复问题、私密信息、知识库位置 / 审核门、元忆联动失败、hook 不生效时，先看 references/faq.md。
+- **沉淀**：上文"什么时候写"任一命中 → 先归位 → 立即写；
+- **查询**：开工 / 动手前 / 写前 / 复盘 → `kb query`、`kb list`；
+- **首次使用**：走「激活知识库」四步；
+- **关键词**：知识库 / kb / 查知识 / 记一笔 / 沉淀 / 经验 / 踩坑 / learnings 等。
+
+**Do NOT**：不把私密 / 敏感信息写进 KB 与项目公开文件；不把项目专属经验塞进共享 KB；未初始化时先走激活引导，不假装可用。
+
+日常排障先看 `references/faq.md`。

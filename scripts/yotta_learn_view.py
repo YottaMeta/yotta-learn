@@ -37,7 +37,7 @@ DEFAULT_PORT = 8791
 TOKEN_HEADER = "x-yotta-view-token"
 BODY_LIMIT = 64 * 1024
 TOKEN_PLACEHOLDER = "__YOTTA_VIEW_TOKEN__"
-VIEW_VERSION = "0.5.1"
+VIEW_VERSION = "0.6.0"
 AUDIT_TAIL_LIMIT = 200
 
 # @generated view-html:start
