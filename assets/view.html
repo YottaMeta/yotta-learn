@@ -118,7 +118,9 @@ pre.body{background:#fbfcfd;border:1px solid var(--line);border-radius:6px;paddi
 .mask{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:45;padding:20px}
 .mask.open{display:flex}
 .modal{width:min(480px,100%);max-height:86vh;overflow:auto;background:var(--panel);border:1px solid var(--line-strong);border-radius:10px;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,.2)}
+.modal.wide{width:min(720px,100%)}
 .modal h3{margin:0 0 10px;font-size:15px}
+.modal h3 .hint{font-weight:400;color:var(--ink-3);font-size:12px}
 .modal .field{margin-bottom:10px}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 .checkline-inline{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-2)}
@@ -187,8 +189,9 @@ function toast(msg,kind){
   setTimeout(()=>box.remove(),4200);
 }
 let modalOkFn=null;
-function closeModal(){$('#modalMask').classList.remove('open');modalOkFn=null;}
+function closeModal(){$('#modalMask').classList.remove('open');$('#modalBox').classList.remove('wide');modalOkFn=null;}
 function openModal(title,bodyHtml,onOk,okText,danger){
+  $('#modalBox').classList.remove('wide');
   $('#modalBox').innerHTML='<h3>'+esc(title)+'</h3>'+bodyHtml+
     '<div class="modal-actions"><button class="ghost" id="modalCancel">取消</button>'+
     '<button class="'+(danger?'danger':'primary')+'" id="modalOk">'+esc(okText||'确认')+'</button></div>';
@@ -434,8 +437,7 @@ async function renderEntries(seq){
       '<div class="field"><label>分类</label><select id="fCat">'+options+'</select></div>'+
       '<div class="field"><label>状态</label><select id="fStatus"><option value="">全部</option><option>draft</option><option>verified</option><option>deprecated</option></select></div>'+
       '<div class="field"><label>标签</label><input id="fTag"></div><button class="ghost" id="fApply">筛选</button>'+
-    '</div><div id="entryTable">'+(rows?'<table><thead><tr><th>ID</th><th>状态</th><th>分类</th><th>标题</th><th>标签</th><th>更新</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="empty">暂无条目</div>')+'</div></div>'+
-    '<div id="entryDetail"></div>';
+    '</div><div id="entryTable">'+(rows?'<table><thead><tr><th>ID</th><th>状态</th><th>分类</th><th>标题</th><th>标签</th><th>更新</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="empty">暂无条目</div>')+'</div></div>';
   $('#addBtn').onclick=async()=>{
     try{
       const r=await act('entry.add',{category:$('#addCat').value,title:$('#addTitle').value.trim(),message:$('#addMsg').value,
@@ -468,8 +470,9 @@ async function openEntry(id){
     const e=await api('/api/entry?id='+encodeURIComponent(id));
     state.entry=e;
     const verified=e.status==='verified'?'<div class="notice ok">已核验（'+esc(e.verified_by||'')+' @ '+fmtTime(e.verified_at)+'）</div>':'';
-    $('#entryDetail').innerHTML=
-      '<div class="panel"><h2>'+esc(e.id)+' <span class="hint">'+esc(e.title)+'</span> '+pill(e.status)+'</h2>'+verified+
+    $('#modalBox').classList.add('wide');
+    $('#modalBox').innerHTML=
+      '<h3>'+esc(e.id)+' <span class="hint">'+esc(e.title)+'</span> '+pill(e.status)+'</h3>'+verified+
       '<pre class="body">'+esc(e.body||'')+'</pre>'+
       '<div class="row" style="margin-top:10px">'+
         '<div class="field grow"><label>标题</label><input id="edTitle" value="'+esc(e.title)+'"></div>'+
@@ -487,7 +490,10 @@ async function openEntry(id){
       '<div class="row" style="margin-top:10px">'+
         '<div class="field"><label>停用确认串</label><input id="edConfirm" placeholder="'+CONFIRM.entryDeprecate+'"></div>'+
         '<div class="field grow"><label>停用原因</label><input id="edReason"></div>'+
-      '</div></div>';
+      '</div>'+
+      '<div class="modal-actions"><button class="ghost" id="modalCancel">关闭</button></div>';
+    $('#modalCancel').onclick=closeModal;
+    $('#modalMask').classList.add('open');
     $('#edSave').onclick=async()=>{
       try{
         await act('entry.update',{id:e.id,title:$('#edTitle').value.trim(),message:$('#edMsg').value,
@@ -537,15 +543,15 @@ async function renderReview(seq){
   const rows=d.entries.map(e=>'<tr class="click" data-id="'+esc(e.id)+'"><td class="mono">'+esc(e.id)+'</td><td>'+esc(e.title)+'</td><td class="muted">'+esc(e.category)+'</td><td class="muted">'+fmtTime(e.updated)+'</td></tr>').join('');
   $('#view').innerHTML=
     '<div class="panel"><h2>待审核草稿 <span class="hint">'+esc(d.count)+' 条</span></h2>'+
-      (rows?'<table><thead><tr><th>ID</th><th>标题</th><th>分类</th><th>更新</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="empty">没有待审核草稿</div>')+'</div>'+
-    '<div id="reviewDetail"></div>';
+      (rows?'<table><thead><tr><th>ID</th><th>标题</th><th>分类</th><th>更新</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="empty">没有待审核草稿</div>')+'</div>';
   $('#view').querySelectorAll('tr.click').forEach(r=>r.onclick=()=>openReview(r.dataset.id));
 }
 
 async function openReview(id){
   const e=await api('/api/entry?id='+encodeURIComponent(id));
-  $('#reviewDetail').innerHTML=
-    '<div class="panel"><h2>'+esc(e.id)+' <span class="hint">'+esc(e.title)+'</span></h2>'+
+  $('#modalBox').classList.add('wide');
+  $('#modalBox').innerHTML=
+    '<h3>'+esc(e.id)+' <span class="hint">'+esc(e.title)+'</span></h3>'+
     '<div class="qa"><b>质检三问</b><br>1）验证过？有可验证的证据<br>2）自包含？不依赖会话上下文即可复用<br>3）无敏感？无密钥 / 个人信息 / 本机路径</div>'+
     '<pre class="body" style="margin-top:10px">'+esc(e.body||'')+'</pre>'+
     '<div class="row" style="margin-top:10px">'+
@@ -556,7 +562,10 @@ async function openReview(id){
       '<div class="field"><label>force 确认串</label><input id="rvConfirm" placeholder="'+CONFIRM.reviewForce+'"></div>'+
       '<button class="primary" id="rvPass">核验通过</button>'+
       '<button class="danger" id="rvReject">拒绝并移入回收站</button>'+
-    '</div><div id="rvNotice"></div></div>';
+      '<button class="ghost" id="modalCancel">关闭</button>'+
+    '</div><div id="rvNotice"></div>';
+  $('#modalCancel').onclick=closeModal;
+  $('#modalMask').classList.add('open');
   const send=async(decision)=>{
     try{
       const body={id:e.id,decision:decision,evidence:$('#rvEvidence').value.trim(),note:$('#rvNote').value.trim()};
@@ -564,6 +573,7 @@ async function openReview(id){
       const r=await act('entry.review',body);
       toast(decision==='pass'?('已核验 '+e.id):('已拒绝 '+e.id),'ok');
       if((r.findings||[]).length)toast('force 放行 '+r.findings.length+' 处敏感命中（已记审计）','');
+      closeModal();
       go('review');
     }catch(err){$('#rvNotice').innerHTML='<div class="notice err">'+esc(err.message)+'</div>';}
   };
