@@ -21,6 +21,7 @@ import re
 import secrets
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -36,8 +37,9 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8791
 TOKEN_HEADER = "x-yotta-view-token"
 BODY_LIMIT = 64 * 1024
+DRAIN_TIMEOUT_SECONDS = 3.0  # 排空请求体的总时间预算（超时即放弃并关闭连接，BUG-L-03）
 TOKEN_PLACEHOLDER = "__YOTTA_VIEW_TOKEN__"
-VIEW_VERSION = "0.6.3"
+VIEW_VERSION = "0.6.4"
 AUDIT_TAIL_LIMIT = 200
 
 # @generated view-html:start
@@ -474,18 +476,39 @@ class ViewHandler(BaseHTTPRequestHandler):
             "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
         })
 
-    def _drain_body(self, limit=1 << 20):
-        """读掉未处理的请求体（有界），避免 Windows 下未读数据触发 RST（客户端 10053，BUG-L-02）。"""
+    def _drain_body(self, limit=1 << 20, timeout=None):
+        """读掉未处理的请求体（有界 + 有超时），避免 Windows RST 与阻塞挂线程（BUG-L-02 / BUG-L-03）。"""
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             return
         remaining = max(0, min(length, limit))
-        while remaining > 0:
-            chunk = self.rfile.read(min(remaining, 65536))
-            if not chunk:
-                break
-            remaining -= len(chunk)
+        if remaining <= 0:
+            return
+        budget = DRAIN_TIMEOUT_SECONDS if timeout is None else timeout
+        original = self.connection.gettimeout()
+        deadline = time.monotonic() + budget
+        try:
+            while remaining > 0:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    self.close_connection = True
+                    break
+                self.connection.settimeout(left)
+                try:
+                    chunk = self.rfile.read(min(remaining, 65536))
+                except OSError:
+                    # 读超时 / 套接字异常：放弃排空并关闭连接，不再等待（BUG-L-03）
+                    self.close_connection = True
+                    break
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        finally:
+            try:
+                self.connection.settimeout(original)
+            except OSError:
+                pass
 
     # -- 安全壳 --
 

@@ -354,6 +354,57 @@ def test_early_reject_drain(tmp):
         srv.close()
 
 
+def test_drain_timeout(tmp):
+    """BUG-L-03：声明 Content-Length 却不发请求体的连接不得挂住 worker（读超时兜底）。"""
+    root = Path(tmp) / "drain-timeout-kb"
+    yotta_kb.init_kb(root, "tester@host")
+    srv = Server(root)
+    host = "127.0.0.1"
+    port = srv.server.server_address[1]
+    old_budget = v.DRAIN_TIMEOUT_SECONDS
+    v.DRAIN_TIMEOUT_SECONDS = 0.3
+
+    def stalled(partial):
+        sock = socket.create_connection((host, port), timeout=5)
+        try:
+            sock.sendall(
+                ("POST /api/action HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Content-Type: application/json\r\n"
+                 "Content-Length: 1048576\r\n"
+                 "Connection: close\r\n"
+                 "\r\n" % (host, port)).encode("ascii"))
+            if partial:
+                sock.sendall(b"x" * 1024)
+            sock.settimeout(3.0)
+            started = time.monotonic()
+            data = b""
+            while b"\r\n\r\n" not in data:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                data += chunk
+            elapsed = time.monotonic() - started
+            return elapsed, data.decode("iso-8859-1", "replace")
+        finally:
+            sock.close()
+
+    try:
+        for label, partial in (("实发 0 字节", False), ("实发 1 KB 后停", True)):
+            try:
+                elapsed, head = stalled(partial)
+            except Exception as exc:  # noqa: BLE001
+                check("排空读超时（%s）：限时返回 403（BUG-L-03）" % label, False,
+                      "异常: %r" % exc)
+                continue
+            check("排空读超时（%s）：限时返回 403（BUG-L-03）" % label,
+                  head.startswith("HTTP/1.1 403") and elapsed < 3.0,
+                  "elapsed=%.2fs head=%r" % (elapsed, head[:80]))
+    finally:
+        v.DRAIN_TIMEOUT_SECONDS = old_budget
+        srv.close()
+
+
 def test_port_conflict(tmp):
     root = Path(tmp) / "port-conflict-kb"
     yotta_kb.init_kb(root, "tester@host")
@@ -447,6 +498,7 @@ def main():
         test_security_helpers()
         test_http_flow(tmp)
         test_early_reject_drain(tmp)
+        test_drain_timeout(tmp)
         test_legacy_write_block(tmp)
         test_port_conflict(tmp)
         test_port_conflict_cli(tmp)

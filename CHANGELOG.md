@@ -1,5 +1,11 @@
 # 更新日志
 
+## v0.6.4 (2026-10-13)
+
+- **修复 BUG-L-03（P3，WorkBuddy 复验发现；0.6.3 引入）**：`_drain_body()` 增加**读超时**（默认总预算 3 s，常量 `DRAIN_TIMEOUT_SECONDS`）—— 声明 `Content-Length` 却迟迟不发请求体的连接不再挂住 worker 线程；超时即置 `close_connection = True` 并照常返回响应（403 / 404 / 413 / 安全壳全覆盖）；排空后恢复套接字原超时值。
+- **回归测试**：新增 `test_drain_timeout` —— `Content-Length: 1 MB` + 实发 0 字节 / 实发 1 KB 后停，两种情况断言限时（<3 s）干净返回 403（修复前会挂住）；view 套件 63 → 65 项。
+- 本批 CLI / MCP / KB 数据行为零改动。
+
 ## v0.6.3 (2026-10-13)
 
 - **修复 BUG-L-02（P2，WorkBuddy 复验发现）**：`view` 面板 POST 早退分支（令牌 403 / 路径 404 / 安全壳 403）在返回前按 `Content-Length` 排空请求体（有界 1 MB，抽为 `_drain_body` 复用；413 分支同步改造），杜绝 Windows 下「未读请求体 → RST → 客户端间歇 10053」；`Content-Length` 非法时标记连接不复用。

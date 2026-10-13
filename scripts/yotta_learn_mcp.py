@@ -31,7 +31,7 @@ sys.path.insert(0, str(_HERE))
 import yotta_kb  # noqa: E402
 import yotta_kb_index  # noqa: E402
 
-VERSION = "0.6.3"
+VERSION = "0.6.4"
 TOOL_NAME = "yotta-learn"
 CN_NAME = "元习"
 MCP_PROTOCOL_MODERN = "2026-07-28"
