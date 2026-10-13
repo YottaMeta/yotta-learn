@@ -37,7 +37,7 @@ DEFAULT_PORT = 8791
 TOKEN_HEADER = "x-yotta-view-token"
 BODY_LIMIT = 64 * 1024
 TOKEN_PLACEHOLDER = "__YOTTA_VIEW_TOKEN__"
-VIEW_VERSION = "0.6.2"
+VIEW_VERSION = "0.6.3"
 AUDIT_TAIL_LIMIT = 200
 
 # @generated view-html:start
@@ -474,17 +474,28 @@ class ViewHandler(BaseHTTPRequestHandler):
             "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
         })
 
+    def _drain_body(self, limit=1 << 20):
+        """读掉未处理的请求体（有界），避免 Windows 下未读数据触发 RST（客户端 10053，BUG-L-02）。"""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            return
+        remaining = max(0, min(length, limit))
+        while remaining > 0:
+            chunk = self.rfile.read(min(remaining, 65536))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+
     # -- 安全壳 --
 
     def _guard(self):
         ctx = self.server.view_ctx  # type: ignore[attr-defined]
-        if not host_allowed(self.headers.get("Host"), self.server.server_port):
-            self._text(403, "forbidden")
-            return False
-        if not origin_allowed(self.headers.get("Origin"), self.headers.get("Host")):
-            self._text(403, "forbidden")
-            return False
-        if not fetch_site_allowed(self.headers.get("Sec-Fetch-Site")):
+        if (not host_allowed(self.headers.get("Host"), self.server.server_port)
+                or not origin_allowed(self.headers.get("Origin"), self.headers.get("Host"))
+                or not fetch_site_allowed(self.headers.get("Sec-Fetch-Site"))):
+            if self.command == "POST":
+                self._drain_body()
             self._text(403, "forbidden")
             return False
         return ctx
@@ -529,24 +540,23 @@ class ViewHandler(BaseHTTPRequestHandler):
             return
         parsed = urlparse(self.path)
         if parsed.path != "/api/action":
+            self._drain_body()
             return self._text(404, "not found")
         if not token_allowed(self.headers.get(TOKEN_HEADER), ctx.token):
+            self._drain_body()
             return self._json(403, {"error": "写操作需要有效的本机会话令牌；"
                                              "请从 yotta-learn view 页面操作。"})
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
+            # 长度未知无法可靠排空：标记连接不复用，尽量降低 RST 影响
+            self.close_connection = True
             return self._json(400, {"error": "Content-Length 非法"})
         if length <= 0:
             return self._json(400, {"error": "请求体为空"})
         if length > BODY_LIMIT:
             # 丢弃超量请求体（上限 1 MB），避免污染 keep-alive 连接
-            remaining = min(length, 1 << 20)
-            while remaining > 0:
-                chunk = self.rfile.read(min(remaining, 65536))
-                if not chunk:
-                    break
-                remaining -= len(chunk)
+            self._drain_body()
             return self._json(413, {"error": "请求体过大（上限 %d 字节）" % BODY_LIMIT})
         raw = self.rfile.read(length)
         try:

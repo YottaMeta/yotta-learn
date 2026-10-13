@@ -326,6 +326,34 @@ def test_legacy_write_block(tmp):
                 os.environ[key] = value
 
 
+def test_early_reject_drain(tmp):
+    """BUG-L-02：POST 早退分支（403 令牌 / 404 路径）先排空请求体，避免客户端间歇 10053。"""
+    root = Path(tmp) / "drain-kb"
+    yotta_kb.init_kb(root, "tester@host")
+    srv = Server(root)
+    base = srv.url.rstrip("/")
+
+    def burst(label, path, payload, expect, count):
+        for i in range(count):
+            try:
+                code, _body, _h = http("POST", base + path, payload=payload)
+            except Exception as exc:  # noqa: BLE001
+                check(label, False, "第 %d 次异常: %r" % (i + 1, exc))
+                return
+            if code != expect:
+                check(label, False, "第 %d 次 code=%s（期望 %s）" % (i + 1, code, expect))
+                return
+        check(label, True)
+
+    try:
+        burst("403 早退排空：无令牌 POST×30 全部干净返回", "/api/action",
+              {"action": "entry.add"}, 403, 30)
+        burst("404 早退排空：错误路径 POST×10 全部干净返回", "/api/not-exist",
+              {"x": "y"}, 404, 10)
+    finally:
+        srv.close()
+
+
 def test_port_conflict(tmp):
     root = Path(tmp) / "port-conflict-kb"
     yotta_kb.init_kb(root, "tester@host")
@@ -418,6 +446,7 @@ def main():
         test_embedded_view_sync()
         test_security_helpers()
         test_http_flow(tmp)
+        test_early_reject_drain(tmp)
         test_legacy_write_block(tmp)
         test_port_conflict(tmp)
         test_port_conflict_cli(tmp)
