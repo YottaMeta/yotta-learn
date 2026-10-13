@@ -318,7 +318,9 @@ async function renderCli(seq){
 async function loadRootBadge(){
   try{
     const info=await api('/api/location');
-    $('#kbRoot').textContent=info.root;
+    $('#kbRoot').textContent='KB：'+info.root;
+    const parts=String(info.root||'').split(/[\\/]/).filter(Boolean);
+    document.title='元习知识库 · 管理台'+(parts.length?' · '+parts[parts.length-1]:'');
     setOrigin('位置来源：'+info.origin+(info.initialized?'':'（未初始化）'),info.initialized);
   }catch(e){setOrigin('位置不可用：'+e.message,false);}
 }

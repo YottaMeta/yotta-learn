@@ -12,9 +12,12 @@ legacy 回退写拦截（409）。
 import json
 import os
 import shutil
+import socket
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -323,6 +326,78 @@ def test_legacy_write_block(tmp):
                 os.environ[key] = value
 
 
+def test_port_conflict(tmp):
+    root = Path(tmp) / "port-conflict-kb"
+    yotta_kb.init_kb(root, "tester@host")
+    first, _token, _url = v.create_view_server(root_dir=str(root), port=0)
+    actual = first.server_address[1]
+    try:
+        check("面板服务器禁用地址复用（allow_reuse_address=False）",
+              first.allow_reuse_address is False)
+        try:
+            v.create_view_server(root_dir=str(root), port=actual)
+            check("同端口第二个实例被拒绝", False,
+                  "第二次 create_view_server 竟然成功（双绑回归）")
+        except yotta_kb.KbUsageError as exc:
+            check("同端口第二个实例被拒绝（人话提示）",
+                  "已被占用" in exc.message, exc.message)
+    finally:
+        first.server_close()
+
+    second, _token2, url2 = v.create_view_server(root_dir=str(root), port=0)
+    try:
+        check("--port 0 绑定随机空闲端口且 URL 使用实际端口",
+              second.server_address[1] != 0 and str(second.server_address[1]) in url2,
+              url2)
+    finally:
+        second.server_close()
+
+
+def test_port_conflict_cli(tmp):
+    root = Path(tmp) / "port-conflict-cli-kb"
+    yotta_kb.init_kb(root, "tester@host")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    env = os.environ.copy()
+    env["USERPROFILE"] = str(Path(tmp) / "home")
+    env["HOME"] = str(Path(tmp) / "home")
+    env["YOTTA_LEARN_KB"] = str(root)
+    script = str(_HERE / "yotta_learn.py")
+    first = subprocess.Popen(
+        [sys.executable, script, "view", "--port", str(port)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding="utf-8", errors="replace", env=env)
+    try:
+        ready = False
+        for _ in range(60):
+            try:
+                with urllib.request.urlopen(
+                        "http://127.0.0.1:%d/api/location" % port, timeout=1):
+                    ready = True
+                    break
+            except Exception:  # noqa: BLE001
+                time.sleep(0.25)
+        check("CLI：第一个实例已监听", ready, "port=%d" % port)
+        second = subprocess.run(
+            [sys.executable, script, "view", "--port", str(port)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env=env, timeout=30)
+        out = (second.stdout or "") + (second.stderr or "")
+        check("CLI：同端口第二个实例非零退出", second.returncode != 0,
+              "rc=%s out=%s" % (second.returncode, out.strip()[:160]))
+        check("CLI：同端口第二个实例给出人话提示", "已被占用" in out,
+              out.strip()[:160])
+        check("CLI：同端口第二个实例不再宣称已启动", "已启动" not in out,
+              out.strip()[:160])
+    finally:
+        first.terminate()
+        try:
+            first.communicate(timeout=10)
+        except Exception:  # noqa: BLE001
+            first.kill()
+
+
 def test_embedded_view_sync():
     assets = (_HERE.parent / "assets" / "view.html").read_text(encoding="utf-8")
     check("面板嵌入副本与 assets/view.html 逐字节一致（SkillHub 副本不带 assets 也可用）",
@@ -344,6 +419,8 @@ def main():
         test_security_helpers()
         test_http_flow(tmp)
         test_legacy_write_block(tmp)
+        test_port_conflict(tmp)
+        test_port_conflict_cli(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\n结果：%d 通过 / %d 失败" % (PASS, FAIL))
