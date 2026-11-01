@@ -1,5 +1,9 @@
 # 更新日志
 
+## v0.6.5 (2026-11-01)
+
+- 安装器 containment：目标根 / 嵌套链接 fail-closed；受管 Hub 链接解析真实目标；精简安装器同口径。
+
 ## v0.6.4 (2026-10-13)
 
 - **修复 BUG-L-03（P3，WorkBuddy 复验发现；0.6.3 引入）**：`_drain_body()` 增加**读超时**（默认总预算 3 s，常量 `DRAIN_TIMEOUT_SECONDS`）—— 声明 `Content-Length` 却迟迟不发请求体的连接不再挂住 worker 线程；超时即置 `close_connection = True` 并照常返回响应（403 / 404 / 413 / 安全壳全覆盖）；排空后恢复套接字原超时值。
