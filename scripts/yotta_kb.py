@@ -336,7 +336,7 @@ def migrate_kb(source_root, target_root, stamp=None):
         verify = _verify_migration(source, staging)
         if target.exists():
             target.rmdir()
-        os.replace(str(staging), str(target))
+        _replace_with_retry(staging, target)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
