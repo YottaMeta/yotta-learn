@@ -59,6 +59,14 @@ time.sleep(30)
     (bin_dir / "fake_ym.py").write_text(body, encoding="utf-8")
     cmd = bin_dir / "yotta-memory.cmd"
     cmd.write_text('@echo off\r\npython "%s\\fake_ym.py" %%*\r\n' % str(bin_dir), encoding="utf-8")
+    if os.name != "nt":
+        shim = bin_dir / "yotta-memory"
+        shim.write_text(
+            '#!/bin/sh\nexec "%s" "%s" "$@"\n'
+            % (sys.executable, bin_dir / "fake_ym.py"),
+            encoding="utf-8",
+        )
+        shim.chmod(0o755)
 
 
 class LearnCliTest(unittest.TestCase):
