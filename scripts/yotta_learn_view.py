@@ -39,7 +39,7 @@ TOKEN_HEADER = "x-yotta-view-token"
 BODY_LIMIT = 64 * 1024
 DRAIN_TIMEOUT_SECONDS = 3.0  # 排空请求体的总时间预算（超时即放弃并关闭连接，BUG-L-03）
 TOKEN_PLACEHOLDER = "__YOTTA_VIEW_TOKEN__"
-VIEW_VERSION = "0.6.5"
+VIEW_VERSION = "0.6.6"
 AUDIT_TAIL_LIMIT = 200
 
 # @generated view-html:start

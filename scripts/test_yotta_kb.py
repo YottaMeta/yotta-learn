@@ -716,6 +716,23 @@ class KbMigrationUnitTest(unittest.TestCase):
         self.assertFalse(target.exists())
         self.assertEqual(list(self.dir.glob("dst-kb2.kb-migrating-*")), [])
 
+    def test_archive_moved_kb_retries_transient_windows_sharing_violation(self):
+        real_replace = yotta_kb.os.replace
+        calls = []
+
+        def flaky_replace(source, destination):
+            calls.append((source, destination))
+            if len(calls) < 3:
+                raise PermissionError(13, "访问被拒绝", source)
+            return real_replace(source, destination)
+
+        with mock.patch.object(yotta_kb.os, "replace", side_effect=flaky_replace):
+            moved = yotta_kb.archive_moved_kb(self.src, "retry")
+
+        self.assertEqual(len(calls), 3)
+        self.assertTrue((moved / "kb.json").exists())
+        self.assertFalse(self.src.exists())
+
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])

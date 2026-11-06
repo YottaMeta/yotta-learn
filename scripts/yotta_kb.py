@@ -345,6 +345,17 @@ def migrate_kb(source_root, target_root, stamp=None):
             "digest": verify["digest"], "stamp": stamp}
 
 
+def _replace_with_retry(source, destination):
+    """Retry Windows sharing violations caused by short-lived scanner handles."""
+    for delay in (0.05, 0.1, 0.2, 0.4):
+        try:
+            os.replace(str(source), str(destination))
+            return
+        except PermissionError:
+            time.sleep(delay)
+    os.replace(str(source), str(destination))
+
+
 def archive_moved_kb(source_root, stamp=None):
     """把旧库移出原位（改名 <原名>.kb-moved-<stamp>），返回新路径。"""
     source = Path(source_root).expanduser().resolve()
@@ -354,7 +365,7 @@ def archive_moved_kb(source_root, stamp=None):
     while moved.exists():
         moved = source.parent / ("%s.kb-moved-%s-%d" % (source.name, stamp, n))
         n += 1
-    os.replace(str(source), str(moved))
+    _replace_with_retry(source, moved)
     return moved
 
 
